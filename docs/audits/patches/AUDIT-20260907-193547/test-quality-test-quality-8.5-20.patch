@@ -1,0 +1,8 @@
+From: test-quality (finding test-quality-8.5) — verified MEDIUM by independent verifier
+Subject: [PROPOSAL — NOT APPLIED, NOT TESTED] Franchise chains longer than MAX_DEPTH=10 untested: truncation silently misclassifies long series
+File: tests/scoring.test.ts:181
+
+Verifier note: Reproduced empirically, not just argued: built a 13-node PREQUEL chain in-pool with listMap marking 3..12 COMPLETED and 1-2 absent. Result for id 13 = {kind: "NEXT_STEP", rootId: 3, entryPointId: null} — exactly as claimed: the user is told S13 is the next step while entries 1-2 are unseen, and the true root is lost so the same franchise splits into two dedupe groups (rootId 1 for nodes 1/2/3, rootId 3 for 3..13). This violates the invariant the suite itself pins in test 7 ('never show S3 without S1') and feeds recommend.ts's entry-point suppression/epMap logic. All existing franchise tests use chains of 2-3; no test pins MAX_DEPTH=10 truncation semantics. MEDIUM: deterministic, reachable via ordinary long-running franchises (Conan, Monogatari), defeats the feature's core promise when it fires; frequency bounded by needing >10 prequel entries inside a ~13-query popularity-ranked candidate pool.
+
+Proposed fix (from attacker, unapplied):
+Build a 13-node chain (media(i).relations = [{id: i-1, relationType: "PREQUEL"}]) with listMap marking 3..11 COMPLETED and 1-2 absent, then assert the documented intent for id 13 — e.g. it must not be NEXT_STEP (currently it is, which is a bug the test should either pin as EXPECTED or expose), and that rootId falls back consistently. At minimum add a comment+test asserting the deliberate truncation semantics.

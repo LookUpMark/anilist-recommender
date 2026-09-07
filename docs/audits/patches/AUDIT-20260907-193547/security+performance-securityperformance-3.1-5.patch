@@ -1,0 +1,8 @@
+From: security+performance (finding security+performance-3.1) — verified HIGH by independent verifier
+Subject: [PROPOSAL — NOT APPLIED, NOT TESTED] 429 retry loop is unbounded and treats a malformed/zero Retry-After as "no delay", hammering the API forever
+File: src/server/anilist.ts:138
+
+Verifier note: Verificato sul codice: il ramo 429 (anilist.ts:138-142) e' l'unico senza gate su `attempt` (network e 5xx gateano su attempt<3 a righe 132/143), quindi 429 persistenti = loop infinito e richiesta mai risolta (nessun timeout server-side in index.ts, i .catch dei caller non coprono fetchUserList). Edge secondario provato empiricamente su Node 22: setTimeout(fn, NaN|Infinity|0|-500) scatta tutti in ~1ms, quindi Retry-After in forma HTTP-date (Number->NaN) o vuoto (Number('')=0) degrada il loop a busy-retry da ~1ms che consuma un token del bucket a ogni giro, peggiorando il throttle. Rilevanza attuale alta: docs/anilist-api.md:26 registra AniList degradato a 30/min con burst limiter e outage in corso (verificato live: 403 stability issues oggi), quindi 429 temporanei sono plausibili con il margine di 5 req/min del bucket locale.
+
+Proposed fix (from attacker, unapplied):
+Cap 429 retries and sanitize the delay: `const raw = Number(res.headers.get("retry-after")); const wait = Number.isFinite(raw) && raw > 0 ? Math.min(raw, 60) : 5; if (attempt >= 10) throw new AniListError("AniList rate-limited", 429); await sleep(wait * 1000); continue;`

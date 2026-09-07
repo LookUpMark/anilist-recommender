@@ -1,0 +1,8 @@
+From: logic (finding logic-4.3) — verified MEDIUM by independent verifier
+Subject: [PROPOSAL — NOT APPLIED, NOT TESTED] Calling dedupeFranchises twice (recommend.ts:101→108) resets every groupSize to 1 — the "{n} more in this series" badge can never render
+File: src/server/recommend.ts:108
+
+Verifier note: Verified with the real scoring.ts: dedupeFranchises recomputes sizeByRoot from its own input (scoring.ts:200,210), and recommend.ts calls it twice (101 then 108). Repro with scoreAll+dedupeFranchises: after 1st call groupSize=3 (pool-wide), after 2nd call groupSize=1 for the same reco. Since the 2nd input holds one entry per root, every count is 1, so RecoCard.tsx:46 `r.groupSize > 1` is unreachable and the "{n} more in this series" badge (strings.ts:43/127) is dead in production. Tests cover dedupeFranchises only in isolation (scoring.test.ts:101-122 asserts groupSize=2 on a single call) and api.test.ts never asserts groupSize, so nothing catches it. Always-on when any franchise collapses; impact is a silently missing user-facing feature, no wrong data.
+
+Proposed fix (from attacker, unapplied):
+In recommend.ts drop the second call (the relink loop at lines 103-107 only rewrites rootId of already-unique representatives), or carry the size through: `const withGroups = deduped.map(r => r.rootId == null ? r : { ...r, groupSize: firstPassSize.get(r.media.id) ?? r.groupSize })`. Alternatively make dedupeFranchises idempotent by not recomputing when `r.groupSize > 1`.

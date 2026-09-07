@@ -1,0 +1,20 @@
+From: dependency (finding dependency-13.1) — verified MEDIUM by independent verifier
+Subject: [PROPOSAL — NOT APPLIED, NOT TESTED] CI pnpm toolchain unpinned: corepack without packageManager field, while lockfile/build policy require pnpm >=11
+File: .github/workflows/ci.yml:13
+
+Verifier note: Verificato sul codice reale: package.json (1-32) non ha alcun campo packageManager, grep su tutto il repo (escluso lockfile) trov zero occorrenze, nessun .npmrc o pin alternativo; quindi `corepack enable` (ci.yml:13) + `pnpm install --frozen-lockfile` (ci.yml:14) eseguono la pnpm "last known good" risolta dal corepack del runner. Riprodotto empiricamente: `corepack pnpm --version` in dir senza packageManager risolve 12.3.4 dal LKG di corepack 0.34.6. La parte allowBuilds e' confermata da fonte autorevole (CHANGELOG di pnpm 12.3.4: "Those settings were replaced by allowBuilds in pnpm 11 and silently ignored since") e dal grep del dist di pnpm 10.18.3 (zero occorrenze di allowBuilds); la divergenza di policy e' riprodotta: pnpm@10.18.3 install --frozen-lockfile sul medesimo manifest stampa "Ignored build scripts: esbuild" (allowlist non onorata), pnpm@12.3.4 no. Il lockfile e' 9.0 e viene accettato da entrambi, quindi oggi nulla fallisce: e' un difetto di riproducibilita'/policy silente, non un break attivo (inoltre il repo non ha remote: CI mai girata). Coerente con la rubrica: impatto medio (toolchain non riproducibile + build-script approval policy dichiarata in pnpm-workspace.yaml che puo' sparire in CI) con esposizione ad ogni run -> MEDIUM. Inesattezza cosmetica nel finding: pnpm 10 non stampa un "unknown-setting warning" ma il warning "Ignored build scripts"; sostanza invariata. La sotto-osservazione su node-version: 22 vs engines >=22.18 e' corretta ma oggi inattiva (il float risolve >=22.18). Fix proposto (aggiungere "packageManager": "pnpm@12.3.4") e' corretto e minimo: corepack con il campo presente ancora esattamente quella versione, nessuna modifica al workflow necessaria.
+
+Proposed fix (from attacker, unapplied):
+Pin the package manager in package.json so corepack installs exactly that version:
+
+```diff
+--- a/package.json
++++ b/package.json
+@@
+   "type": "module",
+   "license": "MIT",
++  "packageManager": "pnpm@12.3.4",
+   "engines": {
+```
+
+Optionally also pin Node in ci.yml to a specific line matching engines (e.g. `node-version: 22.18` or add engines check) so the CI toolchain is fully reproducible. No workflow change is required for pnpm: with `packageManager` present, `corepack enable` + `pnpm install --frozen-lockfile` resolves the pinned version.

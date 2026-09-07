@@ -1,0 +1,8 @@
+From: logic+security (finding logic+security-10.3) — verified MEDIUM by independent verifier
+Subject: [PROPOSAL — NOT APPLIED, NOT TESTED] finish() has no catch: setup action failures are invisible (unhandled rejection, buttons just re-enable)
+File: src/ui/components/SetupWizard.tsx:42
+
+Verifier note: Codice confermato: finish e' try/finally senza catch; postSetup->json() throwa su !res.ok e i tre onClick={() => finish(…)} scartano la promise -> unhandled rejection senza feedback (nessun handler globale: main.tsx e' solo createRoot, niente unhandledrejection/ErrorBoundary). Caso concreto verificato: '?' non matcha /^https?:\/\/[\w.:/-]+$/ del server (setup.ts:365) ma passa il check client (riga 180) -> 400 invalid_url silenzioso. Stessa classe su install-cli (.catch(()=>undefined)) che ingoia anche il 409 busy. Impatto medio: l'utente resta senza alcuna spiegazione su un'action del flusso primario (l'unico surface errori del wizard e' quello del job, non delle action); frequenza limitata ai path di errore, ma sono i guasti reali piu' comuni (URL con query string, server riavviato, rete). MEDIUM.
+
+Proposed fix (from attacker, unapplied):
+Add `const [err, setErr] = useState<string|null>(null)`; in `finish` wrap in try/catch: `catch (e) { setErr(String((e as Error).message)); }` and render it next to the actions (reuse the `status.job.state === "error"` block styling). Align the client URL check with the server (or use `new URL(customUrl)` + protocol/host check) so an invalid URL is blocked before submission.

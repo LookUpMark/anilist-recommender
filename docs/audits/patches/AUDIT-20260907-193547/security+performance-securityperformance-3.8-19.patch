@@ -1,0 +1,8 @@
+From: security+performance (finding security+performance-3.8) — verified MEDIUM by independent verifier
+Subject: [PROPOSAL — NOT APPLIED, NOT TESTED] RATE_PER_MIN of 0 (or negative) wedges takeToken: no refill and sleep(Infinity)
+File: src/server/anilist.ts:84
+
+Verifier note: Aritmetica verificata: config.ts:16 accetta qualunque numero, anilist.ts:84 `refillPerSec = RATE_PER_MIN/60`; con 0 il refill e' nullo (solo i 3 token iniziali) e `sleep(1000/0)=sleep(Infinity)`, con NaN (basta un valore .env non numerico, Number() su stringa) `tokens` diventa NaN e sleep(NaN) — provato su Node 22 che tutti questi delay vengono clamppati a ~1ms: hot loop permanente, nessuna richiesta completa mai, piu' loop concorrenti che spinnano. Impatto alto (server muto finche' non lo riavvii) ma trigger raro e solo da configurazione operatore (RATE_PER_MIN non e' nemmeno documentato in .env.example, default 25): per rubrica 'alto ma raro' = MEDIUM.
+
+Proposed fix (from attacker, unapplied):
+Clamp at the definition site so all callers share it: `export const RATE_PER_MIN = Math.max(1, Number(process.env.RATE_PER_MIN ?? 25));` in config.ts, or in anilist.ts: `const refillPerSec = Math.max(0.1, RATE_PER_MIN / 60);`

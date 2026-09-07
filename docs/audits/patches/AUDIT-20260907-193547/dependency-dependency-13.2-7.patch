@@ -1,0 +1,20 @@
+From: dependency (finding dependency-13.2) — verified MEDIUM by independent verifier
+Subject: [PROPOSAL — NOT APPLIED, NOT TESTED] GitHub Actions pinned to mutable major tags instead of commit SHAs
+File: .github/workflows/ci.yml:9
+
+Verifier note: Confermato dalla lettura integrale del file: ci.yml:9 `uses: actions/checkout@v4` e ci.yml:10 `uses: actions/setup-node@v4` sono tag mobili, con trigger push+pull_request (ci.yml:2-4) che li esegue ad ogni evento. Nessuna mitigazione presente: il workflow non dichiara un blocco `permissions:` (GITHUB_TOKEN ai permessi default del repo, non least-privilege), non ci sono secret nel workflow, e .github/ contiene solo ci.yml (nessun dependabot/renovate a mantenere i pin aggiornati). Il vettore descritto regge: spostamento del tag o compromissione del repo upstream = esecuzione di codice arbitraio in CI con token abilitato alla scrittura su push. Impatto alto ma con probabilita' di sfruttamento legata a compromissione upstream (rara) -> bucket "alto ma raro" = MEDIUM della rubrica; niente secret nel workflow, quindi il raggio resta token repo + code execution, come gia' correttamente delimitato dal finding. Fix (pin a SHA pieno con commento versione) e' lo standard di hardening raccomandato da GitHub e corretto.
+
+Proposed fix (from attacker, unapplied):
+Pin both actions to full commit SHAs, keeping the version as a comment:
+
+```diff
+--- a/.github/workflows/ci.yml
++++ b/.github/workflows/ci.yml
+@@
+-      - uses: actions/checkout@v4
+-      - uses: actions/setup-node@v4
++      - uses: actions/checkout@<full-40-char-sha> # v4.x
++      - uses: actions/setup-node@<full-40-char-sha> # v4.x
+```
+
+Resolve the SHAs with `gh api repos/actions/checkout/git/refs/tags/v4` (and the same for setup-node); optionally add a dependabot config to keep the pins updated.

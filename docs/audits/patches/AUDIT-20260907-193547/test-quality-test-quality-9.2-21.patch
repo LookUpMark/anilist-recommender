@@ -1,0 +1,8 @@
+From: test-quality (finding test-quality-9.2) — verified MEDIUM by independent verifier
+Subject: [PROPOSAL — NOT APPLIED, NOT TESTED] Test di setup non isolato dalla rete reale: la sonda HTTP su 127.0.0.1:1234 (LM Studio) bypassa il fake lms
+File: tests/setup.test.ts:129
+
+Verifier note: Confermato end-to-end sul codice: /api/setup/finish scrive baseUrl: LMSTUDIO_BASE (setup.ts:378); run() (setup.ts:249-253) sonda il VERO http://127.0.0.1:1234/v1/models — const hardcoded senza override env (grep: solo setup.ts:23,249,332,378). Un 2xx → early-return backendState='up' PRIMA di resolveLms: il fake lms (LMS_PATH, test riga 75) non è mai invocato, callsPath non viene creato, e le assert a righe 129-132 falliscono dopo aver consumato l'intero deadline di 20s (righe 118-128). Il meccanismo è esattamente la tipologia-utente dell'app (dev con LM Studio server attivo su 1234). Aggravante non citata dal finder: anche LLM_BASE_URL nel .env di repo (config.ts:4-11 → hasCustomEnv() → setup.ts:234 early-return) produce lo stesso fallimento post-20s. Non mitigato da nessuna parte. Check live: porta 1234 libera su questa macchina oggi (lsof exit 1) — il test passa qui ora, il che conferma che è flakiness dipendente dall'ambiente e non un fallimento attuale. MEDIUM: impatto medio (falso fallimento + 20s di stall) e frequente sulla popolazione target; resta test-only, nessun impatto produttivo, quindi non HIGH.
+
+Proposed fix (from attacker, unapplied):
+Rendere LMSTUDIO_BASE sovrascrivibile da env (es. `process.env.LMSTUDIO_BASE_URL ?? "http://127.0.0.1:1234/v1"` in setup.ts) e nel test puntarlo a una porta chiusa (binding effimero su porta 0 poi rilasciata), così il percorso daemon→server→get→load è deterministico.

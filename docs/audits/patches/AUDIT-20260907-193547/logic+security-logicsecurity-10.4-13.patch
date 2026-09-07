@@ -1,0 +1,8 @@
+From: logic+security (finding logic+security-10.4) — verified MEDIUM by independent verifier
+Subject: [PROPOSAL — NOT APPLIED, NOT TESTED] Unvalidated lang from localStorage throws in tr() and white-screens the app on every reload
+File: src/ui/App.tsx:19
+
+Verifier note: Confermato: useState casta Qualsiasi stringa da localStorage (App.tsx:19-21) e tr fa DICTS[lang][key] senza optional chaining (strings.ts:178) — per un valore != 'en'/'it' il property read lanca TypeError durante il primo render. main.tsx monta <App/> senza error boundary → white screen totale. Il valore è persistito (App.tsx:40) e riletto a ogni load, quindi il crash è persistente finché localStorage non viene svuotato a mano. Mitigante sulla frequenza: l'unico writer nel repo è questa app e scrive solo 'en'/'it' (grep su tutto src/), quindi il trigger richiede un attore esterno (altra app sullo stesso origin, edit manuale in devtools, valore di una versione futura/passata). Impatto alto (DoS totale e persistente della UI) ma raro: rubrica 'alto ma raro' → MEDIUM.
+
+Proposed fix (from attacker, unapplied):
+Validate before casting: `const saved = localStorage.getItem("lang"); const [lang, setLang] = useState<Lang>(saved === "it" ? "it" : "en");` — or make `tr` null-safe: `DICTS[lang]?.[key] ?? DICTS.en?.[key] ?? key`.

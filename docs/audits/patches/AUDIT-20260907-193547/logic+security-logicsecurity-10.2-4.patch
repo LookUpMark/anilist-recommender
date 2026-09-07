@@ -1,0 +1,8 @@
+From: logic+security (finding logic+security-10.2) — verified HIGH by independent verifier
+Subject: [PROPOSAL — NOT APPLIED, NOT TESTED] phase never returns to 'idle': the search form is permanently disabled after the first successful search
+File: src/ui/App.tsx:137
+
+Verifier note: Verificato end-to-end su App.tsx + UsernameForm.tsx. busy copre 'profile' e 'recos' (App.tsx:137); l'unico path che torna a 'idle' è il catch (linea 86), il successo termina in setPhase("recos") (linea 66) senza mai resettare. Doppio blocco: button disabled={!valid || props.busy} (UsernameForm.tsx:30) e guard if (valid && !props.busy) nell'onSubmit (riga 16). Nessun altro writer di phase, nessun bottone 'nuova ricerca': dopo il primo successo la form è morta per tutta la sessione. Il ramo loading linea 146 è confermato dead code (setPhase("recos") sempre emesso nello stesso tick di setResult, entrambi dopo await). L'hazard fetchExplain senza sequence guard è reale ma latente: irraggiungibile finché la ri-ricerca è bloccata (dopo il fix diventa vivo, quindi la suggestedFix copre entrambe). Severità: difetto che scatta sempre dopo il primo successo e disabilita una funzione primaria (ricercare un altro utente), l'utente vede l'app congelata; recupero solo via reload.
+
+Proposed fix (from attacker, unapplied):
+Track in-flight explicitly instead of reusing the terminal phase: `const [loading, setLoading] = useState(false)` set true at the top of `run()`, false in a `finally`, pass `busy={loading}`; keep `phase` only for what to render. Guard the explain upgrade with a request sequence: `const seq = ++runSeq.current; fetchExplain(...).then(ex => { if (seq !== runSeq.current) return; ... })`.

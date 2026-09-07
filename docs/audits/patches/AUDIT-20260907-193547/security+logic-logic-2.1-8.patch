@@ -1,0 +1,8 @@
+From: security+logic (finding logic-2.1) — verified MEDIUM by independent verifier
+Subject: [PROPOSAL — NOT APPLIED, NOT TESTED] runInstall has no timeout and no cancel: a hanging install leaves the job permanently busy
+File: src/server/setup.ts:203
+
+Verifier note: Verificato: runInstall (setup.ts:203-214) non ha timer né kill, a differenza di runLms (120-125); i busy guard a 170 e 188 bloccano /install-cli e /download con 409; job è module-level e /reset non lo tocca → solo il restart recupera. install-cli È cablato nella wizard (SetupWizard.tsx:109) e jobBusy disabilita il bottone, quindi un curl|bash appeso (curl senza --max-time, stdin /dev/null) bricka l'onboarding finché l'app non riparte. Trigger raro ma impatto alto sul flusso primario → MEDIUM (non HIGH: recuperabile con restart, nessun danno dati).
+
+Proposed fix (from attacker, unapplied):
+Add a bounded timer like runLms (e.g. 10 min for the CLI installer), send SIGTERM then SIGKILL after a grace period, and set `job = { state: "error", ... }` on timeout. Optionally a POST /setup/job/cancel that kills the child and resets `job`.
