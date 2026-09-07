@@ -1,0 +1,145 @@
+{
+  "entries": [
+    { "mediaId": 101, "status": "COMPLETED", "score": 90, "repeat": 1, "title": "Test Series S1" },
+    { "mediaId": 201, "status": "DROPPED", "score": 0, "repeat": 0, "title": "Dropped Show S1" },
+    { "mediaId": 110, "status": "COMPLETED", "score": 85, "repeat": 0, "title": "Psych Thriller A" },
+    { "mediaId": 111, "status": "COMPLETED", "score": 92, "repeat": 0, "title": "Psych Thriller B" },
+    { "mediaId": 112, "status": "COMPLETED", "score": 88, "repeat": 0, "title": "Psych Thriller C" },
+    { "mediaId": 120, "status": "CURRENT", "score": 80, "repeat": 0, "title": "Space Opera A" },
+    { "mediaId": 121, "status": "COMPLETED", "score": 86, "repeat": 0, "title": "Space Opera B" },
+    { "mediaId": 130, "status": "DROPPED", "score": 0, "repeat": 0, "title": "Cozy Show" },
+    { "mediaId": 131, "status": "COMPLETED", "score": 0, "repeat": 0, "title": "Unscored Completed" },
+    { "mediaId": 140, "status": "PAUSED", "score": 50, "repeat": 0, "title": "Meh Show" },
+    { "mediaId": 150, "status": "PLANNING", "score": 0, "repeat": 0, "title": "Planned Someday" },
+    { "mediaId": 160, "status": "COMPLETED", "score": 95, "repeat": 2, "title": "All Time Fav" },
+    { "mediaId": 170, "status": "DROPPED", "score": 0, "repeat": 0, "title": "Slapstick Drop A" },
+    { "mediaId": 171, "status": "DROPPED", "score": 0, "repeat": 0, "title": "Slapstick Drop B" },
+    { "mediaId": 172, "status": "DROPPED", "score": 0, "repeat": 0, "title": "Slapstick Drop C" },
+    { "mediaId": 173, "status": "DROPPED", "score": 0, "repeat": 0, "title": "Slapstick Drop D" }
+  ],
+  "media": [
+    {
+      "id": 101, "title": "Test Series S1", "format": "TV", "seasonYear": 2014,
+      "genres": ["Action", "Drama"],
+      "tags": [{ "name": "Conflict", "rank": 90, "isSpoiler": false }],
+      "studio": "Sunrise", "averageScore": 82, "popularity": 300000,
+      "coverImage": null, "coverColor": "#3355ee", "siteUrl": "https://anilist.co/anime/101",
+      "description": "First season.", "relations": [{ "id": 102, "relationType": "SEQUEL" }]
+    },
+    {
+      "id": 201, "title": "Dropped Show S1", "format": "TV", "seasonYear": 2016,
+      "genres": ["Comedy"],
+      "tags": [{ "name": "Slapstick", "rank": 85, "isSpoiler": false }],
+      "studio": "Pierrot", "averageScore": 65, "popularity": 200000,
+      "coverImage": null, "coverColor": "#aa3333", "siteUrl": "https://anilist.co/anime/201",
+      "description": "A comedy.", "relations": [{ "id": 202, "relationType": "SEQUEL" }]
+    },
+    {
+      "id": 110, "title": "Psych Thriller A", "format": "TV", "seasonYear": 2012,
+      "genres": ["Mystery", "Psychological"],
+      "tags": [{ "name": "Psychological", "rank": 95, "isSpoiler": false }, { "name": "Thrills", "rank": 70, "isSpoiler": false }],
+      "studio": "Madhouse", "averageScore": 85, "popularity": 400000,
+      "coverImage": null, "coverColor": "#333333", "siteUrl": "https://anilist.co/anime/110",
+      "description": "Mind games.", "relations": []
+    },
+    {
+      "id": 111, "title": "Psych Thriller B", "format": "TV", "seasonYear": 2015,
+      "genres": ["Psychological", "Drama"],
+      "tags": [{ "name": "Psychological", "rank": 92, "isSpoiler": false }, { "name": "Ensemble Cast", "rank": 65, "isSpoiler": false }],
+      "studio": "Madhouse", "averageScore": 87, "popularity": 350000,
+      "coverImage": null, "coverColor": "#333344", "siteUrl": "https://anilist.co/anime/111",
+      "description": "More mind games.", "relations": []
+    },
+    {
+      "id": 112, "title": "Psych Thriller C", "format": "TV", "seasonYear": 2018,
+      "genres": ["Psychological", "Mystery"],
+      "tags": [{ "name": "Psychological", "rank": 88, "isSpoiler": false }],
+      "studio": "Production I.G", "averageScore": 80, "popularity": 150000,
+      "coverImage": null, "coverColor": "#223344", "siteUrl": "https://anilist.co/anime/112",
+      "description": "Even more mind games.", "relations": []
+    },
+    {
+      "id": 120, "title": "Space Opera A", "format": "TV", "seasonYear": 2019,
+      "genres": ["Sci-Fi", "Drama"],
+      "tags": [{ "name": "Space", "rank": 90, "isSpoiler": false }],
+      "studio": "Sunrise", "averageScore": 84, "popularity": 120000,
+      "coverImage": null, "coverColor": "#113355", "siteUrl": "https://anilist.co/anime/120",
+      "description": "War in space.", "relations": []
+    },
+    {
+      "id": 121, "title": "Space Opera B", "format": "TV", "seasonYear": 2020,
+      "genres": ["Sci-Fi"],
+      "tags": [{ "name": "Space", "rank": 85, "isSpoiler": false }],
+      "studio": "Sunrise", "averageScore": 83, "popularity": 90000,
+      "coverImage": null, "coverColor": "#113366", "siteUrl": "https://anilist.co/anime/121",
+      "description": "More war in space.", "relations": []
+    },
+    {
+      "id": 130, "title": "Cozy Show", "format": "TV", "seasonYear": 2021,
+      "genres": ["Slice of Life", "Comedy"],
+      "tags": [{ "name": "Cute Girls Doing Cute Things", "rank": 80, "isSpoiler": false }],
+      "studio": "Kyoto Animation", "averageScore": 78, "popularity": 80000,
+      "coverImage": null, "coverColor": "#ee88aa", "siteUrl": "https://anilist.co/anime/130",
+      "description": "Cozy.", "relations": []
+    },
+    {
+      "id": 170, "title": "Slapstick Drop A", "format": "TV", "seasonYear": 2019,
+      "genres": ["Comedy"],
+      "tags": [{ "name": "Slapstick", "rank": 85, "isSpoiler": false }],
+      "studio": "Pierrot", "averageScore": 66, "popularity": 70000,
+      "coverImage": null, "coverColor": "#aa5533", "siteUrl": "https://anilist.co/anime/170",
+      "description": null, "relations": []
+    },
+    {
+      "id": 171, "title": "Slapstick Drop B", "format": "TV", "seasonYear": 2020,
+      "genres": ["Comedy"],
+      "tags": [{ "name": "Slapstick", "rank": 83, "isSpoiler": false }],
+      "studio": "Pierrot", "averageScore": 65, "popularity": 60000,
+      "coverImage": null, "coverColor": "#aa5544", "siteUrl": "https://anilist.co/anime/171",
+      "description": null, "relations": []
+    },
+    {
+      "id": 172, "title": "Slapstick Drop C", "format": "TV", "seasonYear": 2021,
+      "genres": ["Comedy"],
+      "tags": [{ "name": "Slapstick", "rank": 81, "isSpoiler": false }],
+      "studio": "Pierrot", "averageScore": 64, "popularity": 55000,
+      "coverImage": null, "coverColor": "#aa5555", "siteUrl": "https://anilist.co/anime/172",
+      "description": null, "relations": []
+    },
+    {
+      "id": 173, "title": "Slapstick Drop D", "format": "TV", "seasonYear": 2022,
+      "genres": ["Comedy"],
+      "tags": [{ "name": "Slapstick", "rank": 79, "isSpoiler": false }],
+      "studio": "Pierrot", "averageScore": 63, "popularity": 50000,
+      "coverImage": null, "coverColor": "#aa5566", "siteUrl": "https://anilist.co/anime/173",
+      "description": null, "relations": []
+    },
+    {
+      "id": 131, "title": "Unscored Completed", "format": "MOVIE", "seasonYear": 2017,
+      "genres": ["Drama"], "tags": [], "studio": null, "averageScore": 75, "popularity": 60000,
+      "coverImage": null, "coverColor": "#555577", "siteUrl": "https://anilist.co/anime/131",
+      "description": null, "relations": []
+    },
+    {
+      "id": 140, "title": "Meh Show", "format": "TV", "seasonYear": 2022,
+      "genres": ["Action"], "tags": [{ "name": "Super Power", "rank": 75, "isSpoiler": false }],
+      "studio": "Pierrot", "averageScore": 70, "popularity": 100000,
+      "coverImage": null, "coverColor": "#557755", "siteUrl": "https://anilist.co/anime/140",
+      "description": null, "relations": []
+    },
+    {
+      "id": 150, "title": "Planned Someday", "format": "TV", "seasonYear": 2023,
+      "genres": ["Fantasy"], "tags": [], "studio": null, "averageScore": 80, "popularity": 50000,
+      "coverImage": null, "coverColor": "#775555", "siteUrl": "https://anilist.co/anime/150",
+      "description": null, "relations": []
+    },
+    {
+      "id": 160, "title": "All Time Fav", "format": "TV", "seasonYear": 2013,
+      "genres": ["Psychological", "Drama"],
+      "tags": [{ "name": "Psychological", "rank": 97, "isSpoiler": false }, { "name": "Time Loop", "rank": 70, "isSpoiler": false }],
+      "studio": "Madhouse", "averageScore": 90, "popularity": 500000,
+      "coverImage": null, "coverColor": "#443355", "siteUrl": "https://anilist.co/anime/160",
+      "description": "The favorite.", "relations": []
+    }
+  ]
+}

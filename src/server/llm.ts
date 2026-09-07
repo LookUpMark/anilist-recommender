@@ -1,0 +1,147 @@
+import { createHash } from "node:crypto";
+import { mkdir, readFile, writeFile } from "node:fs/promises";
+import { join } from "node:path";
+import type { Explanation, Lang, ScoredReco, TasteProfile } from "../shared/types.ts";
+import { CACHE_DIR, CACHE_TTL_EXPL_MS, llmBaseUrl, LLM_MODEL, LLM_TIMEOUT_MS } from "./config.ts";
+
+const EXPL_DIR = join(CACHE_DIR, "expl");
+
+export async function llmHealth(): Promise<boolean> {
+  try {
+    const res = await fetch(`${llmBaseUrl()}/models`, { signal: AbortSignal.timeout(2000) });
+    return res.ok;
+  } catch {
+    return false;
+  }
+}
+
+async function llmChat(messages: { role: string; content: string }[]): Promise<string> {
+  const res = await fetch(`${llmBaseUrl()}/chat/completions`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ model: LLM_MODEL, messages, temperature: 0.3 }),
+    signal: AbortSignal.timeout(LLM_TIMEOUT_MS),
+  });
+  if (!res.ok) throw new Error(`LLM HTTP ${res.status}`);
+  const json = (await res.json()) as { choices?: { message?: { content?: string } }[] };
+  return json.choices?.[0]?.message?.content ?? "";
+}
+
+const LANG_NAME: Record<Lang, string> = { en: "English", it: "Italian" };
+
+function buildPrompt(recos: ScoredReco[], profile: TasteProfile, lang: Lang): string {
+  const loved = profile.loved
+    .slice(0, 10)
+    .map((d) => `${d.dim} ${d.value} (e.g. ${d.examples.slice(0, 2).join(", ") || "n/a"})`)
+    .join("; ");
+  const disliked = profile.disliked
+    .slice(0, 6)
+    .map((d) => `${d.dim} ${d.value}`)
+    .join("; ");
+  const items = recos
+    .map(
+      (r, i) =>
+        `${i}. id=${r.media.id} "${r.media.title}" (${r.media.seasonYear ?? "?"}, ${r.media.studio ?? "?"}) ` +
+        `genres: ${r.media.genres.slice(0, 4).join(", ")}; tags: ${r.media.tags
+          .filter((t) => t.rank >= 60)
+          .slice(0, 5)
+          .map((t) => t.name)
+          .join(", ")}; AniList score ${r.media.averageScore ?? "?"}/100, ${r.media.popularity} members; ` +
+        `deterministic match note: ${r.why}`,
+    )
+    .join("\n");
+  return (
+    `You are an anime expert. The user's taste profile — they love: ${loved || "not enough data"}. ` +
+    `They dislike: ${disliked || "nothing notable"}.\n` +
+    `For each candidate below, write 2-3 sentences in ${LANG_NAME[lang]} on why THIS user would (or would not) enjoy it. ` +
+    `Use ONLY the facts provided — do not invent plot details. Reference their taste profile concretely.\n\n${items}\n\n` +
+    `Reply with ONLY a JSON array: [{"id":<media id>,"why":"<explanation>"}]`
+  );
+}
+
+/** Extract the JSON array even when the model wraps it in prose or fences. */
+function parseExplanations(raw: string): { id: number; why: string }[] {
+  const start = raw.indexOf("[");
+  const end = raw.lastIndexOf("]");
+  if (start === -1 || end <= start) return [];
+  try {
+    const arr = JSON.parse(raw.slice(start, end + 1)) as { id: number; why: string }[];
+    return Array.isArray(arr)
+      ? arr.filter((x) => typeof x?.id === "number" && typeof x?.why === "string")
+      : [];
+  } catch {
+    return [];
+  }
+}
+
+async function cacheGet(key: string): Promise<Record<string, string> | null> {
+  try {
+    const hit = JSON.parse(await readFile(join(EXPL_DIR, `${key}.json`), "utf8"));
+    if (Date.now() < hit.exp) return hit.items as Record<string, string>;
+  } catch {
+    /* miss */
+  }
+  return null;
+}
+
+async function cacheSet(key: string, items: Record<string, string>): Promise<void> {
+  await mkdir(EXPL_DIR, { recursive: true });
+  await writeFile(
+    join(EXPL_DIR, `${key}.json`),
+    JSON.stringify({ exp: Date.now() + CACHE_TTL_EXPL_MS, items }),
+  );
+}
+
+/**
+ * Explain recos via the local LLM. Falls back to the deterministic why for any
+ * id the model misses — all-or-nothing LLM failure still yields explanations.
+ */
+export async function explainRecos(
+  recos: ScoredReco[],
+  profile: TasteProfile,
+  lang: Lang,
+  username: string,
+): Promise<Map<number, Explanation>> {
+  const out = new Map<number, Explanation>();
+  const pending: ScoredReco[] = [];
+  const fresh = new Map<string, string>();
+
+  const key = createHash("sha256")
+    .update(`${username}|${profile.hash}|${lang}|${LLM_MODEL}|`)
+    .update(recos.map((r) => r.media.id).sort((a, b) => a - b).join(","))
+    .digest("hex");
+  const cached = await cacheGet(key);
+  for (const r of recos) {
+    const hit = cached?.[String(r.media.id)];
+    out.set(r.media.id, hit ? { text: hit, source: "cache" } : { text: r.why, source: "fallback" });
+    if (!hit) pending.push(r);
+  }
+  if (pending.length === 0) return out;
+
+  try {
+    // ponytail: batches of max 10 — small local models degrade past that
+    for (let i = 0; i < pending.length; i += 10) {
+      const batch = pending.slice(i, i + 10);
+      const raw = await llmChat([
+        { role: "system", content: "You output only valid JSON." },
+        { role: "user", content: buildPrompt(batch, profile, lang) },
+      ]);
+      for (const e of parseExplanations(raw)) {
+        const reco = batch.find((r) => r.media.id === e.id);
+        const text = e.why.trim();
+        if (reco && text.length > 0) {
+          out.set(e.id, { text, source: "llm" });
+          fresh.set(String(e.id), text);
+        }
+      }
+      // cache fallbacks too so the whole batch is served from cache next time
+      for (const r of batch) {
+        if (!fresh.has(String(r.media.id))) fresh.set(String(r.media.id), r.why);
+      }
+    }
+    if (fresh.size > 0) await cacheSet(key, { ...(cached ?? {}), ...Object.fromEntries(fresh) });
+  } catch {
+    // LLM unreachable/slow — deterministic fallbacks already in place
+  }
+  return out;
+}

@@ -1,0 +1,99 @@
+export type Lang = "en" | "it";
+
+export type ListStatus =
+  | "CURRENT"
+  | "PLANNING"
+  | "COMPLETED"
+  | "DROPPED"
+  | "PAUSED"
+  | "REPEATING";
+
+export interface ListEntry {
+  mediaId: number;
+  status: ListStatus;
+  /** Normalized 0-100 (0 = unscored). */
+  score: number;
+  repeat: number;
+  title: string;
+}
+
+export interface MediaTagLite {
+  name: string;
+  rank: number;
+  isSpoiler: boolean;
+}
+
+export interface MediaRelationLite {
+  id: number;
+  relationType: string;
+}
+
+export interface MediaLite {
+  id: number;
+  title: string;
+  format: string | null;
+  seasonYear: number | null;
+  genres: string[];
+  tags: MediaTagLite[];
+  studio: string | null;
+  averageScore: number | null;
+  popularity: number;
+  coverImage: string | null;
+  coverColor: string | null;
+  siteUrl: string | null;
+  description: string | null;
+  relations: MediaRelationLite[];
+}
+
+export type Dim = "tag" | "genre" | "studio" | "era";
+
+export interface DimValue {
+  dim: Dim;
+  value: string;
+  /** -1..1, shrunk by support. */
+  aff: number;
+  support: number;
+  /** Titles the user rated highly that contain this value. */
+  examples: string[];
+}
+
+export interface TasteProfile {
+  userName: string;
+  meanScore: number;
+  scoredCount: number;
+  confidence: "ok" | "low";
+  counts: Record<ListStatus, number>;
+  loved: DimValue[];
+  disliked: DimValue[];
+  /** Stable fingerprint of the list (ids+scores+statuses). */
+  hash: string;
+}
+
+export type Badge = "NEXT_STEP" | "ENTRY_POINT" | "HIDDEN_GEM" | "SPIN_OFF";
+
+export interface ScoredReco {
+  media: MediaLite;
+  /** 0..1.1, display x100. */
+  final: number;
+  breakdown: { affinity: number; quality: number; community: number };
+  badges: Badge[];
+  rootId: number | null;
+  groupSize: number;
+  why: string;
+}
+
+export interface WhyNot {
+  media: MediaLite;
+  reason: string;
+}
+
+export interface RecoResult {
+  profile: TasteProfile;
+  recos: ScoredReco[];
+  avoided: WhyNot[];
+}
+
+export interface Explanation {
+  text: string;
+  source: "llm" | "cache" | "fallback";
+}

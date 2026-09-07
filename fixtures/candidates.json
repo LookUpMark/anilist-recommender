@@ -1,0 +1,66 @@
+[
+  {
+    "id": 102, "title": "Test Series S2", "format": "TV", "seasonYear": 2015,
+    "genres": ["Action", "Drama"],
+    "tags": [{ "name": "Conflict", "rank": 88, "isSpoiler": false }],
+    "studio": "Sunrise", "averageScore": 84, "popularity": 200000,
+    "coverImage": null, "coverColor": "#3355ee", "siteUrl": "https://anilist.co/anime/102",
+    "description": "Second season.", "relations": [{ "id": 101, "relationType": "PREQUEL" }]
+  },
+  {
+    "id": 103, "title": "Test Series S3", "format": "TV", "seasonYear": 2017,
+    "genres": ["Action", "Drama"],
+    "tags": [{ "name": "Conflict", "rank": 86, "isSpoiler": false }],
+    "studio": "Sunrise", "averageScore": 83, "popularity": 180000,
+    "coverImage": null, "coverColor": "#3355ff", "siteUrl": "https://anilist.co/anime/103",
+    "description": "Third season.", "relations": [{ "id": 102, "relationType": "PREQUEL" }]
+  },
+  {
+    "id": 202, "title": "Dropped Show S2", "format": "TV", "seasonYear": 2017,
+    "genres": ["Comedy"],
+    "tags": [{ "name": "Slapstick", "rank": 80, "isSpoiler": false }],
+    "studio": "Pierrot", "averageScore": 66, "popularity": 150000,
+    "coverImage": null, "coverColor": "#aa3333", "siteUrl": "https://anilist.co/anime/202",
+    "description": "Sequel to a dropped show.", "relations": [{ "id": 201, "relationType": "PREQUEL" }]
+  },
+  {
+    "id": 300, "title": "Unseen Series S1", "format": "TV", "seasonYear": 2010,
+    "genres": ["Psychological", "Mystery"],
+    "tags": [{ "name": "Psychological", "rank": 94, "isSpoiler": false }, { "name": "Thrills", "rank": 72, "isSpoiler": false }],
+    "studio": "Madhouse", "averageScore": 86, "popularity": 250000,
+    "coverImage": null, "coverColor": "#333344", "siteUrl": "https://anilist.co/anime/300",
+    "description": "Entry point.", "relations": [{ "id": 301, "relationType": "SEQUEL" }]
+  },
+  {
+    "id": 301, "title": "Unseen Series S2", "format": "TV", "seasonYear": 2011,
+    "genres": ["Psychological", "Mystery"],
+    "tags": [{ "name": "Psychological", "rank": 93, "isSpoiler": false }],
+    "studio": "Madhouse", "averageScore": 87, "popularity": 220000,
+    "coverImage": null, "coverColor": "#333345", "siteUrl": "https://anilist.co/anime/301",
+    "description": "Sequel.", "relations": [{ "id": 300, "relationType": "PREQUEL" }]
+  },
+  {
+    "id": 401, "title": "Hidden Gem Psychological", "format": "TV", "seasonYear": 2016,
+    "genres": ["Psychological", "Mystery"],
+    "tags": [{ "name": "Psychological", "rank": 96, "isSpoiler": false }, { "name": "Time Loop", "rank": 75, "isSpoiler": false }],
+    "studio": "Madhouse", "averageScore": 78, "popularity": 5000,
+    "coverImage": null, "coverColor": "#443355", "siteUrl": "https://anilist.co/anime/401",
+    "description": "Little known, well rated.", "relations": [{ "id": 999, "relationType": "SPIN_OFF" }]
+  },
+  {
+    "id": 402, "title": "Popular Action", "format": "TV", "seasonYear": 2020,
+    "genres": ["Action"],
+    "tags": [{ "name": "Conflict", "rank": 70, "isSpoiler": false }, { "name": "Super Power", "rank": 65, "isSpoiler": false }],
+    "studio": "Pierrot", "averageScore": 88, "popularity": 600000,
+    "coverImage": null, "coverColor": "#557766", "siteUrl": "https://anilist.co/anime/402",
+    "description": "Everyone has seen it.", "relations": []
+  },
+  {
+    "id": 403, "title": "Slapstick Sequel Bait", "format": "TV", "seasonYear": 2018,
+    "genres": ["Comedy"],
+    "tags": [{ "name": "Slapstick", "rank": 82, "isSpoiler": false }],
+    "studio": "Pierrot", "averageScore": 64, "popularity": 90000,
+    "coverImage": null, "coverColor": "#aa3344", "siteUrl": "https://anilist.co/anime/403",
+    "description": "More of what was dropped.", "relations": []
+  }
+]
