@@ -12,6 +12,7 @@ Riprendere il progetto: leggere `docs/README.md` → `decisions.md` → `archite
 | M3 | Layer LLM: `llm.ts`, POST /api/explain, cache spiegazioni, whyNot | Con Ollama attivo: spiegazioni su top-10; LLM irraggiungibile → fallback senza errori (test automatico); seconda richiesta identica → cache | ✅ |
 | M4 | Rifinitura: toggle lingua EN (default)/IT, gems view, dedupe franchise espandibile, stati vuoto/errore, CSS, ui-ux-audit, README quickstart | Audit senza P0; quickstart clone → rec in ≤5 comandi | ✅ (audit statico 0 FAIL; verifica visiva browser da fare con API reale) |
 | M5 | Hardening: e2e vs API reale, liste >1k, utente senza score, 429 reale, edge fixture (lista vuota, 1 entry, zero score), tag v1.0.0 | Checklist e2e documentata; nessun crash su edge | ⬜ bloccata su API AniList stabile / username reale per fixtures |
+| M6 | Setup wizard LLM: hw detect → suggerimento Bonsai-27B/8B → download via LM Studio headless (`lms`) → auto-config backend a ogni avvio (`ensureLlmServer`) | Wizard e2e su mac reale; suite verde; degrado a LLM spento intatto | ✅ logica+test (21/21); e2e con download reale e LM Studio: vedi checklist sotto |
 
 ## Come verificare
 
@@ -26,3 +27,15 @@ ANILIST_FIXTURES=fixtures pnpm dev   # app offline su fixture sintetiche
 
 - **M5**: username AniList di Marco = **LookUpMark** (2026-09-07). Registrare fixtures reali e provare il flusso e2e: `pnpm record-fixtures LookUpMark` poi `pnpm dev`. Il 2026-09-07 l'API rispondeva 403 "temporarily disabled due to severe stability issues" — riprovare quando torna su.
 - Release v1.0.0 dopo M5 (commit solo a nome Marco, push su richiesta)
+
+## Checklist e2e manuale M6 (mac di Marco, LM Studio reale)
+
+- [ ] `rm -f data/config.json && pnpm dev` → wizard mostrato all'avvio
+- [ ] Status mostra M-chip + RAM giuste; ≥16 GB → Bonsai-27B consigliato
+- [ ] Tasto download → barra indeterminata + logTail; alla fine step 3 automatico
+- [ ] Finish → `lms daemon up` + `server start` + `load --context-length=8192` in data/llm.log; health passa a `state:"up"`, `enabled:true`
+- [ ] Consigli con username reale → spiegazioni LLM (source "llm"/"cache")
+- [ ] Kill del server LM Studio → restart app → recupero automatico
+- [ ] Porta 1234 occupata da altro processo → solo log, app integra
+- [ ] `rm data/config.json` → wizard riappare
+- [ ] `.env` con `LLM_BASE_URL` custom → wizard mai mostrato, ensure no-op

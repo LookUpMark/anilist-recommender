@@ -318,6 +318,107 @@ button:disabled {
   font-size: 0.9rem;
 }
 
+/* setup wizard */
+.wizard {
+  max-width: 640px;
+}
+.model-card {
+  background: var(--surface-2);
+  border-radius: var(--radius);
+  padding: 12px 16px;
+  margin: 12px 0;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+.mlx-opt {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.85rem;
+  color: var(--muted);
+  cursor: pointer;
+}
+.warn-box {
+  background: rgba(230, 182, 85, 0.12);
+  color: var(--gem);
+  border-radius: var(--radius);
+  padding: 8px 12px;
+  font-size: 0.85rem;
+  display: block;
+}
+.warn-box code {
+  display: block;
+  margin-top: 6px;
+  word-break: break-all;
+  color: var(--text);
+}
+.action-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin: 14px 0;
+  flex-wrap: wrap;
+}
+.action-row input {
+  flex: 1;
+  min-width: 220px;
+}
+.progress {
+  height: 6px;
+  border-radius: 3px;
+  background: var(--surface-2);
+  overflow: hidden;
+  margin: 12px 0;
+}
+.progress span {
+  display: block;
+  height: 100%;
+  width: 40%;
+  border-radius: 3px;
+  background: var(--accent);
+  animation: slide 1.2s ease-in-out infinite alternate;
+}
+@keyframes slide {
+  from {
+    margin-left: 0;
+  }
+  to {
+    margin-left: 60%;
+  }
+}
+.joblog {
+  background: var(--surface-2);
+  border-radius: var(--radius);
+  padding: 10px 12px;
+  font-size: 0.72rem;
+  max-height: 160px;
+  overflow: auto;
+  white-space: pre-wrap;
+  word-break: break-all;
+}
+.wizard-footer {
+  margin-top: 28px;
+  border-top: 1px solid var(--surface-2);
+  padding-top: 14px;
+  display: grid;
+  gap: 10px;
+  justify-items: start;
+}
+.linklike {
+  background: none;
+  border: none;
+  color: var(--muted);
+  padding: 4px 0;
+  cursor: pointer;
+  font-size: 0.85rem;
+}
+.linklike:hover {
+  color: var(--accent);
+}
+
 @media (max-width: 640px) {
   .dim-cols {
     grid-template-columns: 1fr;

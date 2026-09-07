@@ -97,3 +97,21 @@ export interface Explanation {
   text: string;
   source: "llm" | "cache" | "fallback";
 }
+
+export interface SetupHardware {
+  os: "mac" | "win" | "linux";
+  chip: string;
+  ramGb: number;
+  appleSilicon: boolean;
+}
+
+export interface SetupStatus {
+  setupDone: boolean;
+  customEnv: boolean;
+  hardware: SetupHardware;
+  suggested: { model: string; sizeGb: number; mlx: { model: string; sizeGb: number } | null };
+  lms: { installed: boolean; path: string | null; serverUp: boolean };
+  downloadedModels: string[];
+  job: { state: "idle" | "installing-cli" | "downloading" | "done" | "error"; model: string | null; logTail: string; error?: string };
+  llm: { state: "up" | "starting" | "off" };
+}

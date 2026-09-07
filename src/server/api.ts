@@ -1,9 +1,10 @@
 import { Hono } from "hono";
 import type { Lang } from "../shared/types.ts";
 import { AniListError } from "./anilist.ts";
-import { llmBaseUrl, LLM_MODEL } from "./config.ts";
+import { llmBaseUrl, llmModel } from "./config.ts";
 import { explainRecos, llmHealth } from "./llm.ts";
 import { getProfile, getRecommendation } from "./recommend.ts";
+import { llmBackendState, setupRoutes } from "./setup.ts";
 
 const USERNAME_RE = /^[A-Za-z0-9_-]{1,32}$/;
 const LANGS: ReadonlySet<string> = new Set(["en", "it"]);
@@ -11,10 +12,15 @@ const LANGS: ReadonlySet<string> = new Set(["en", "it"]);
 export const api = new Hono();
 
 api.get("/health", async (c) =>
-  c.json({ ok: true, llm: { model: LLM_MODEL, enabled: await llmHealth() } }),
+  c.json({
+    ok: true,
+    llm: { model: llmModel(), enabled: await llmHealth(), state: llmBackendState() },
+  }),
 );
 
-api.get("/config", (c) => c.json({ llm: { model: LLM_MODEL, baseUrl: llmBaseUrl() } }));
+api.get("/config", (c) => c.json({ llm: { model: llmModel(), baseUrl: llmBaseUrl() } }));
+
+api.route("/setup", setupRoutes);
 
 api.get("/profile/:username", async (c) => {
   const username = c.req.param("username");

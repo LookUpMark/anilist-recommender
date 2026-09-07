@@ -2,7 +2,7 @@ import { createHash } from "node:crypto";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import type { Explanation, Lang, ScoredReco, TasteProfile } from "../shared/types.ts";
-import { CACHE_DIR, CACHE_TTL_EXPL_MS, llmBaseUrl, LLM_MODEL, LLM_TIMEOUT_MS } from "./config.ts";
+import { CACHE_DIR, CACHE_TTL_EXPL_MS, llmBaseUrl, llmModel, LLM_TIMEOUT_MS } from "./config.ts";
 
 const EXPL_DIR = join(CACHE_DIR, "expl");
 
@@ -19,7 +19,7 @@ async function llmChat(messages: { role: string; content: string }[]): Promise<s
   const res = await fetch(`${llmBaseUrl()}/chat/completions`, {
     method: "POST",
     headers: { "content-type": "application/json" },
-    body: JSON.stringify({ model: LLM_MODEL, messages, temperature: 0.3 }),
+    body: JSON.stringify({ model: llmModel(), messages, temperature: 0.3 }),
     signal: AbortSignal.timeout(LLM_TIMEOUT_MS),
   });
   if (!res.ok) throw new Error(`LLM HTTP ${res.status}`);
@@ -107,7 +107,7 @@ export async function explainRecos(
   const fresh = new Map<string, string>();
 
   const key = createHash("sha256")
-    .update(`${username}|${profile.hash}|${lang}|${LLM_MODEL}|`)
+    .update(`${username}|${profile.hash}|${lang}|${llmModel()}|`)
     .update(recos.map((r) => r.media.id).sort((a, b) => a - b).join(","))
     .digest("hex");
   const cached = await cacheGet(key);

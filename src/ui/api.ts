@@ -1,4 +1,4 @@
-import type { Explanation, Lang, RecoResult, TasteProfile } from "../shared/types.ts";
+import type { Explanation, Lang, RecoResult, SetupStatus, TasteProfile } from "../shared/types.ts";
 
 const json = async (res: Response): Promise<any> => {
   const body = await res.json().catch(() => ({}));
@@ -28,4 +28,17 @@ export const fetchExplain = (
     method: "POST",
     headers: { "content-type": "application/json" },
     body: JSON.stringify({ username, ids, lang }),
+  }).then(json);
+
+export const fetchSetupStatus = (): Promise<SetupStatus> =>
+  fetch("/api/setup/status").then(json);
+
+export const postSetup = (
+  action: "install-cli" | "download" | "finish" | "reset",
+  body?: object,
+): Promise<{ ok?: boolean; error?: string }> =>
+  fetch(`/api/setup/${action}`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify(body ?? {}),
   }).then(json);

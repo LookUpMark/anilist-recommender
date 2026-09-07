@@ -1,4 +1,4 @@
-import { readFileSync } from "node:fs";
+import { readFileSync, renameSync, writeFileSync } from "node:fs";
 
 // Minimal .env loader (no dependency): KEY=VALUE lines, existing env wins.
 try {
@@ -15,9 +15,45 @@ export const ANILIST_ENDPOINT = "https://graphql.anilist.co";
 export const ANILIST_FIXTURES = process.env.ANILIST_FIXTURES ?? "";
 export const RATE_PER_MIN = Number(process.env.RATE_PER_MIN ?? 25);
 
-export const LLM_MODEL = process.env.LLM_MODEL ?? "qwen3:8b";
+// --- persisted app config (written by the setup wizard) -------------------------
+// Precedence everywhere: env var > data/config.json > hardcoded default.
+
+export interface AppConfig {
+  setupDone?: boolean;
+  backend?: "lmstudio" | "custom" | "skipped";
+  /** lms model key, e.g. "prism-ml/Bonsai-27B-gguf" */
+  model?: string;
+  baseUrl?: string;
+  lmsPath?: string;
+}
+
+export const CONFIG_PATH =
+  process.env.CONFIG_PATH ?? new URL("../../data/config.json", import.meta.url).pathname;
+
+/** Tolerant read: any error (missing, corrupt) yields an empty config. */
+export function readConfigFile(path: string = CONFIG_PATH): AppConfig {
+  try {
+    return JSON.parse(readFileSync(path, "utf8")) as AppConfig;
+  } catch {
+    return {};
+  }
+}
+
+let fileConfig = readConfigFile();
+
+/** Atomic write (tmp + rename) + in-memory refresh. */
+export function updateConfig(patch: AppConfig, path: string = CONFIG_PATH): void {
+  const merged = { ...readConfigFile(path), ...patch };
+  writeFileSync(`${path}.tmp`, JSON.stringify(merged, null, 2));
+  renameSync(`${path}.tmp`, path);
+  if (path === CONFIG_PATH) fileConfig = merged;
+}
+
+export const llmModel = (): string => process.env.LLM_MODEL ?? fileConfig.model ?? "qwen3:8b";
 /** Read per call (tests repoint the env at a fake server). */
-export const llmBaseUrl = (): string => process.env.LLM_BASE_URL ?? "http://127.0.0.1:11434/v1";
+export const llmBaseUrl = (): string =>
+  process.env.LLM_BASE_URL ?? fileConfig.baseUrl ?? "http://127.0.0.1:11434/v1";
+export const hasCustomEnv = (): boolean => Boolean(process.env.LLM_BASE_URL);
 export const LLM_TIMEOUT_MS = 30_000;
 
 export const CACHE_DIR = new URL("../../data/cache/", import.meta.url).pathname;

@@ -4,6 +4,7 @@ import { serveStatic } from "@hono/node-server/serve-static";
 import { Hono } from "hono";
 import { PORT } from "./config.ts";
 import { api } from "./api.ts";
+import { ensureLlmServer } from "./setup.ts";
 
 const app = new Hono();
 app.route("/api", api);
@@ -22,4 +23,5 @@ if (process.env.NODE_ENV !== "production") {
   serve({ fetch: app.fetch, port: PORT, hostname: "127.0.0.1" });
 }
 
+ensureLlmServer(); // fire-and-forget: no-op unless the setup wizard completed
 console.log(`anilist-recommender on http://127.0.0.1:${PORT}`);

@@ -1,9 +1,10 @@
 import { useEffect, useMemo, useState } from "react";
 import { tr, type Lang } from "../shared/strings.ts";
-import type { RecoResult, TasteProfile } from "../shared/types.ts";
-import { fetchExplain, fetchHealth, fetchProfile, fetchRecommend } from "./api.ts";
+import type { RecoResult, SetupStatus, TasteProfile } from "../shared/types.ts";
+import { fetchExplain, fetchHealth, fetchProfile, fetchRecommend, fetchSetupStatus } from "./api.ts";
 import { ProfilePanel } from "./components/ProfilePanel.tsx";
 import { RecoCard } from "./components/RecoCard.tsx";
+import { SetupWizard } from "./components/SetupWizard.tsx";
 import { UsernameForm } from "./components/UsernameForm.tsx";
 
 type Phase = "idle" | "profile" | "recos";
@@ -27,6 +28,13 @@ export function App() {
   const [sort, setSort] = useState<SortKey>("final");
   const [gemsOnly, setGemsOnly] = useState(false);
   const [format, setFormat] = useState("all");
+  const [setup, setSetup] = useState<SetupStatus | null>(null);
+
+  useEffect(() => {
+    fetchSetupStatus()
+      .then(setSetup)
+      .catch(() => setSetup(null));
+  }, []);
 
   useEffect(() => {
     localStorage.setItem("lang", lang);
@@ -95,6 +103,17 @@ export function App() {
     () => [...new Set((result?.recos ?? []).map((r) => r.media.format).filter(Boolean))] as string[],
     [result],
   );
+
+  if (setup && !setup.setupDone && !setup.customEnv) {
+    return (
+      <SetupWizard
+        lang={lang}
+        setLang={setLang}
+        initial={setup}
+        onDone={() => setSetup({ ...setup, setupDone: true })}
+      />
+    );
+  }
 
   return (
     <main className="app">
