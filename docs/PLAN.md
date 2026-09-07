@@ -24,5 +24,5 @@ ANILIST_FIXTURES=fixtures pnpm dev   # app offline su fixture sintetiche
 
 ## Aperti
 
-- Registrare fixtures reali: `pnpm record-fixtures <username-anilist>` (serve username di Marco; API deve essere raggiungibile)
+- **M5**: username AniList di Marco = **LookUpMark** (2026-09-07). Registrare fixtures reali e provare il flusso e2e: `pnpm record-fixtures LookUpMark` poi `pnpm dev`. Il 2026-09-07 l'API rispondeva 403 "temporarily disabled due to severe stability issues" — riprovare quando torna su.
 - Release v1.0.0 dopo M5 (commit solo a nome Marco, push su richiesta)
