@@ -1,7 +1,7 @@
 import { Hono } from "hono";
 import type { Lang } from "../shared/types.ts";
 import { AniListError } from "./anilist.ts";
-import { llmBaseUrl, llmModel } from "./config.ts";
+import { llmModel } from "./config.ts";
 import { explainRecos, llmHealth } from "./llm.ts";
 import { getProfile, getRecommendation } from "./recommend.ts";
 import { llmBackendState, setupRoutes } from "./setup.ts";
@@ -11,6 +11,18 @@ const LANGS: ReadonlySet<string> = new Set(["en", "it"]);
 
 export const api = new Hono();
 
+// Loopback binding is not per-user: reject Host headers that don't match the
+// local host so DNS-rebinding pages (browser same-origin) and other machines'
+// processes can't reach privileged endpoints. First middleware, covers all /api.
+api.use("*", async (c, next) => {
+  const host = c.req.header("host") ?? "";
+  const hostname = host.replace(/:\d+$/, "").replace(/^\[|\]$/g, "");
+  if (!["127.0.0.1", "localhost", "::1"].includes(hostname)) {
+    return c.json({ error: "forbidden" }, 403);
+  }
+  await next();
+});
+
 api.get("/health", async (c) =>
   c.json({
     ok: true,
@@ -18,7 +30,8 @@ api.get("/health", async (c) =>
   }),
 );
 
-api.get("/config", (c) => c.json({ llm: { model: llmModel(), baseUrl: llmBaseUrl() } }));
+// disclosure-minimal: the base URL can point anywhere after a custom finish — don't announce it
+api.get("/config", (c) => c.json({ llm: { model: llmModel() } }));
 
 api.route("/setup", setupRoutes);
 

@@ -6,7 +6,7 @@ const json = async (res: Response): Promise<any> => {
   return body;
 };
 
-export const fetchHealth = (): Promise<{ ok: boolean; llm: { enabled: boolean; model: string } }> =>
+export const fetchHealth = (): Promise<{ ok: boolean; llm: { enabled: boolean; model: string; state?: string } }> =>
   fetch("/api/health").then(json);
 
 export const fetchProfile = (username: string): Promise<{ profile: TasteProfile }> =>
@@ -30,13 +30,25 @@ export const fetchExplain = (
     body: JSON.stringify({ username, ids, lang }),
   }).then(json);
 
-export const fetchSetupStatus = (): Promise<SetupStatus> =>
-  fetch("/api/setup/status").then(json);
+const isSetupStatus = (b: unknown): b is SetupStatus =>
+  !!b && typeof b === "object" &&
+  typeof (b as SetupStatus).setupDone === "boolean" &&
+  !!(b as SetupStatus).hardware && !!(b as SetupStatus).job &&
+  Array.isArray((b as SetupStatus).downloadedModels);
 
+export const fetchSetupStatus = (): Promise<SetupStatus> =>
+  fetch("/api/setup/status")
+    .then(json)
+    .then((b) => {
+      if (!isSetupStatus(b)) throw new Error("invalid /api/setup/status payload");
+      return b;
+    });
+
+/** Errors arrive as thrown Error (server code in message) — {ok:true} on success. */
 export const postSetup = (
   action: "install-cli" | "download" | "finish" | "reset",
   body?: object,
-): Promise<{ ok?: boolean; error?: string }> =>
+): Promise<{ ok: boolean }> =>
   fetch(`/api/setup/${action}`, {
     method: "POST",
     headers: { "content-type": "application/json" },

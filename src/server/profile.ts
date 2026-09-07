@@ -46,7 +46,7 @@ function addSentiment(
   const a = acc.get(key) ?? { sum: 0, weight: 0, support: 0, examples: [] };
   a.sum += s * rankFactor;
   a.weight += w * rankFactor;
-  a.support += 1;
+  if (w * rankFactor > 0) a.support += 1; // zero-weight observations are not evidence
   if (s > 0.3 && !a.examples.some((x) => x.title === exampleTitle)) {
     a.examples.push({ title: exampleTitle, s });
     a.examples.sort((x, y) => y.s - x.s);
@@ -59,17 +59,21 @@ function finalizeSides(acc: Map<string, Acc>): { loved: DimValue[]; disliked: Di
   const loved: DimValue[] = [];
   const disliked: DimValue[] = [];
   for (const [key, a] of acc) {
-    const [dim, value] = key.split(":") as [Dim, string];
+    // indexOf split: values may contain ':' themselves (unlike split(':'))
+    const colon = key.indexOf(":");
+    const dim = key.slice(0, colon) as Dim;
+    const value = key.slice(colon + 1);
     if (a.weight === 0 || a.support < WEIGHTS.supportMin) continue;
     const aff = (a.sum / a.weight) * (Math.min(a.support, WEIGHTS.supportShrink) / WEIGHTS.supportShrink);
     const dv: DimValue = { dim, value, aff, support: a.support, examples: a.examples.map((x) => x.title) };
     if (aff > WEIGHTS.lovedMin) loved.push(dv);
     else if (aff < -WEIGHTS.lovedMin) disliked.push(dv);
   }
+  // cap by affinity strength, not Map insertion order — the strongest tastes must win
   const cap = (dim: Dim, n: number) =>
-    loved.filter((d) => d.dim === dim).slice(0, n);
+    loved.filter((d) => d.dim === dim).sort((a, b) => b.aff - a.aff).slice(0, n);
   const capNeg = (dim: Dim, n: number) =>
-    disliked.filter((d) => d.dim === dim).slice(0, n);
+    disliked.filter((d) => d.dim === dim).sort((a, b) => a.aff - b.aff).slice(0, n);
   return {
     loved: [
       ...cap("tag", WEIGHTS.topTags),
@@ -117,7 +121,7 @@ export function buildProfile(
 
   const { loved, disliked } = finalizeSides(acc);
   const hash = createHash("sha256")
-    .update(entries.map((e) => `${e.mediaId}:${e.status}:${e.score}`).sort().join("|"))
+    .update(entries.map((e) => `${e.mediaId}:${e.status}:${e.score}:${e.repeat}`).sort().join("|"))
     .digest("hex")
     .slice(0, 16);
 

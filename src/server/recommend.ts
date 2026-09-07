@@ -9,6 +9,8 @@ import { WEIGHTS } from "./config.ts";
 // in-memory result cache: profile+pool are the expensive part; explain() reuses it
 const resultCache = new Map<string, { at: number; result: RecoResult }>();
 const RESULT_TTL_MS = 10 * 60 * 1000;
+// identical concurrent requests share one computation instead of racing
+const inflight = new Map<string, Promise<RecoResult>>();
 
 /** Cheap: list fetch (disk-cached 1h) + profile build. No candidate pool. */
 export async function getProfile(username: string) {
@@ -25,8 +27,15 @@ export async function getRecommendation(
   if (!opts.refresh) {
     const hit = resultCache.get(cacheKey);
     if (hit && Date.now() - hit.at < RESULT_TTL_MS) return hit.result;
+    const pending = inflight.get(cacheKey);
+    if (pending) return pending;
   }
-  const result = await recommendFor(username, lang, opts);
+  const p = recommendFor(username, lang, opts).finally(() => inflight.delete(cacheKey));
+  inflight.set(cacheKey, p);
+  const result = await p;
+  for (const [k, v] of resultCache) {
+    if (Date.now() - v.at >= RESULT_TTL_MS) resultCache.delete(k); // prune on write
+  }
   resultCache.set(cacheKey, { at: Date.now(), result });
   return result;
 }
@@ -58,7 +67,7 @@ async function recommendFor(
   const missingEntries = [...epMap.keys()].filter(
     (id) => !candidates0.some((c) => c.id === id) && !listIds.has(id),
   );
-  const extra = await fetchMediaByIds(missingEntries);
+  const extra = await fetchMediaByIds(missingEntries).catch(() => []);
   const superseded = new Set(epMap.values());
   const candidates = [
     ...candidates0.filter((c) => !superseded.has(c.id) && !skipped.has(c.id)),
@@ -74,13 +83,21 @@ async function recommendFor(
     }
   }
 
-  // community signal: recommendation graph of the user's top-5 rated entries
+  // community signal: recommendation graph of the user's top-5 positively-rated entries
   const community = new Map<number, number>();
   const top5 = [...entries]
     .map((e) => ({ e, s: entrySentiment(e, profile.meanScore).s }))
+    .filter(({ s }) => s > 0)
     .sort((a, b) => b.s - a.s)
     .slice(0, 5);
-  const recLists = await Promise.all(top5.map(({ e }) => fetchRecommendations(e.mediaId).catch(() => [])));
+  const recLists = await Promise.all(
+    top5.map(({ e }) =>
+      fetchRecommendations(e.mediaId).catch((err) => {
+        console.warn(`community fetch failed for ${e.mediaId}:`, (err as Error).message);
+        return [];
+      }),
+    ),
+  );
   for (const recs of recLists) {
     for (const { targetId, rating } of recs) {
       if (rating <= 0 || !candidates.some((c) => c.id === targetId)) continue;
@@ -98,29 +115,34 @@ async function recommendFor(
     franchise,
     lang,
   );
-  const deduped = dedupeFranchises(scored).slice(0, 50);
-  // the entry point card stands in for the whole sequel chain
-  for (const r of deduped) {
-    const orig = epMap.get(r.media.id);
-    const origInfo = orig != null ? franchise.get(orig) : undefined;
-    if (origInfo) r.rootId = origInfo.rootId;
-  }
-  const withGroups = dedupeFranchises(deduped);
+  // one dedupe pass: canonical roots (franchise.ts min-id) keep groups stable,
+  // and an entry point's own root already equals its superseded sequel's root
+  const withGroups = dedupeFranchises(scored).slice(0, 50);
 
-  // anti-recommendations: weakest affinity candidates with honest negative evidence,
-  // never duplicating something already recommended
+  // anti-recommendations: weakest affinity candidates + dropped-series sequels,
+  // with honest negative evidence, never duplicating something already recommended
   const shownIds = new Set(withGroups.map((r) => r.media.id));
   const bottom = [...scored]
     .filter((r) => !shownIds.has(r.media.id))
     .sort((a, b) => a.breakdown.affinity - b.breakdown.affinity)
     .slice(0, 12);
   const avoided: WhyNot[] = [];
-  for (const r of bottom) {
-    const f = franchise.get(r.media.id);
+  const collectWhyNot = (media: WhyNot["media"]): void => {
+    if (shownIds.has(media.id) || avoided.some((a) => a.media.id === media.id)) return;
+    const f = franchise.get(media.id);
     const droppedTitle = f?.droppedId != null ? (listMap.get(f.droppedId)?.title ?? null) : null;
-    const reason = deterministicWhyNot(r.media, profile, f, droppedTitle, lang);
-    if (reason) avoided.push({ media: r.media, reason });
+    const reason = deterministicWhyNot(media, profile, f, droppedTitle, lang);
+    if (reason) avoided.push({ media, reason });
+  };
+  for (const r of bottom) {
+    collectWhyNot(r.media);
     if (avoided.length >= 3) break;
+  }
+  // excluded-by-dropped-prequel candidates are never in `scored` — surface them here
+  for (const c of candidates) {
+    if (avoided.length >= 3) break;
+    if (franchise.get(c.id)?.kind !== "EXCLUDED") continue;
+    collectWhyNot(c);
   }
 
   return { profile, recos: withGroups, avoided };

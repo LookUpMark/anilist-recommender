@@ -55,14 +55,29 @@ test("setup flow with fake lms: status, finish writes config, ensure sequences l
   const dir = mkdtempSync(join(tmpdir(), "alr-setup-"));
   const cfgPath = join(dir, "config.json");
   const callsPath = join(dir, "lms-calls.log");
-  // fake lms: logs argv, answers ls --json with an empty model list, other cmds exit 0
+  // fake lms: logs "subcmd args…" per invocation, empty ls, load fails (fast, no HTTP poll)
   const fakeLms = join(dir, "fake-lms.sh");
   writeFileSync(
     fakeLms,
-    `#!/bin/bash\necho "$0 $*" >> ${JSON.stringify(callsPath)}\nif [ "$1" = "ls" ]; then echo '[]'; fi\nexit 0\n`,
+    [
+      "#!/bin/bash",
+      `echo "$*" >> ${JSON.stringify(callsPath)}`,
+      'if [ "$1" = "ls" ]; then echo \'[]\'; fi',
+      'if [ "$1" = "load" ]; then exit 1; fi',
+      "exit 0",
+      "",
+    ].join("\n"),
   );
   const { chmodSync } = await import("node:fs");
   chmodSync(fakeLms, 0o755);
+
+  // closed port: bind ephemeral, release — deterministic "LM Studio down"
+  const { createServer } = await import("node:http");
+  const blocker = createServer();
+  const closedPort = await new Promise<number>((r) => blocker.listen(0, "127.0.0.1", () => r((blocker.address() as any).port))).then((p) => {
+    blocker.close();
+    return p;
+  });
 
   const PORT = 4791;
   const BASE = `http://127.0.0.1:${PORT}`;
@@ -73,6 +88,7 @@ test("setup flow with fake lms: status, finish writes config, ensure sequences l
       ANILIST_FIXTURES: "fixtures",
       CONFIG_PATH: cfgPath,
       LMS_PATH: fakeLms,
+      LMSTUDIO_BASE_URL: `http://127.0.0.1:${closedPort}/v1`,
       PORT: String(PORT),
     },
     stdio: "ignore",
@@ -112,31 +128,39 @@ test("setup flow with fake lms: status, finish writes config, ensure sequences l
     const cfg = readConfigFile(cfgPath);
     assert.equal(cfg.setupDone, true);
     assert.equal(cfg.backend, "lmstudio");
-    assert.equal(cfg.baseUrl, "http://127.0.0.1:1234/v1");
+    assert.equal(cfg.baseUrl, `http://127.0.0.1:${closedPort}/v1`);
 
-    // ensureLlmServer() was kicked by finish: wait for the full lms sequence
+    // ensureLlmServer() was kicked by finish: wait for the exact lms sequence
+    // (the /status probe before finish emits one extra leading "ls --json")
+    const expected = [
+      "daemon up",
+      "server start",
+      "ls --json",
+      "get prism-ml/Bonsai-27B-gguf --gguf",
+      "load prism-ml/Bonsai-27B-gguf -y --gpu=max --context-length=8192",
+    ];
     const deadline2 = Date.now() + 20000;
-    let calls = "";
+    let seq: string[] = [];
     while (Date.now() < deadline2) {
       try {
-        calls = readFileSync(callsPath, "utf8");
+        seq = readFileSync(callsPath, "utf8").split("\n").filter((l) => l.trim().length > 0);
       } catch {
         /* not written yet */
       }
-      if (calls.includes("load") && calls.includes("--context-length=8192")) break;
-      await new Promise((r) => setTimeout(r, 500));
+      if (seq.slice(-expected.length).length >= expected.length && seq.slice(-1)[0]?.startsWith("load")) break;
+      await new Promise((r) => setTimeout(r, 300));
     }
-    assert.ok(calls.includes("daemon up"), `expected daemon up in: ${calls}`);
-    assert.ok(calls.includes("server start"));
-    assert.ok(calls.includes("get prism-ml/Bonsai-27B-gguf --gguf"), "missing model must be downloaded");
-    assert.ok(calls.includes("--context-length=8192"), `got: ${calls}`);
+    assert.deepEqual(seq.slice(-expected.length), expected, "ensure must run the documented command sequence");
 
+    // load failed on the fake → backend deterministically off (never a phantom "up")
     const health = await (await fetch(`${BASE}/api/health`)).json();
-    assert.ok(["up", "starting", "off"].includes(health.llm.state));
+    assert.equal(health.llm.state, "off");
 
     // wizard reappears after reset
     await fetch(`${BASE}/api/setup/reset`, { method: "POST" });
     assert.deepEqual(readConfigFile(cfgPath), {});
+    const statusAfter = await (await fetch(`${BASE}/api/setup/status`)).json();
+    assert.equal(statusAfter.setupDone, false);
   } finally {
     child.kill("SIGTERM");
     rmSync(dir, { recursive: true, force: true });

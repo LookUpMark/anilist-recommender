@@ -36,6 +36,23 @@ const profile: TasteProfile = {
   hash: "abc",
 };
 
+test("affinity: studio and era dims count (20% of the core weight)", () => {
+  const p: TasteProfile = {
+    ...profile,
+    loved: [
+      { dim: "studio", value: "Madhouse", aff: 0.6, support: 5, examples: ["X"] },
+      { dim: "era", value: "2015", aff: 0.4, support: 5, examples: ["X"] },
+    ],
+  };
+  const hit = media(1, { studio: "Madhouse", seasonYear: 2015 });
+  const miss = media(2, { studio: "Toei", seasonYear: 1990 });
+  const aHit = affinityOf(hit, p).affinity01;
+  const aMiss = affinityOf(miss, p).affinity01;
+  // core = 0.12·0.6 + 0.08·0.4 = 0.104 → affinity01 0.552; no match → neutral 0.5
+  assert.ok(aHit > 0.55, `studio+era match must beat neutral, got ${aHit}`);
+  assert.equal(aMiss, 0.5);
+});
+
 test("affinity: loved tags push up, disliked genres pull down", () => {
   const loved = media(1, {
     tags: [{ name: "Psychological", rank: 90, isSpoiler: false }],
@@ -60,18 +77,22 @@ test("popNorm separates gems from mainstream", () => {
 });
 
 test("hidden gem badge: low popularity + good score + good fit", () => {
-  const gem = media(1, {
-    popularity: 5000,
-    averageScore: 78,
-    tags: [{ name: "Psychological", rank: 95, isSpoiler: false }],
-    genres: ["Mystery"],
-  });
+  const tags = [{ name: "Psychological", rank: 95, isSpoiler: false }];
+  const genres = ["Mystery"];
+  const gem = media(1, { popularity: 5000, averageScore: 78, tags, genres });
   const aff = affinityOf(gem, profile).affinity01;
   const gemScore = gemScoreOf(gem, aff, qualityOf(gem));
   assert.ok(isGem(gem, gemScore), `expected gem, gemScore=${gemScore}`);
   // same fit but popular and mediocre → no gem
-  const popular = media(2, { popularity: 500000, averageScore: 60, tags: gem.tags, genres: gem.genres });
+  const popular = media(2, { popularity: 500000, averageScore: 60, tags, genres });
   assert.ok(!isGem(popular, gemScoreOf(popular, aff, qualityOf(popular))));
+  // thresholds are exact: popularity < 40_000 and averageScore ≥ 72 flip the flag
+  const atLimit = (over: Partial<MediaLite>): MediaLite =>
+    media(9, { popularity: 3000, averageScore: 78, tags, genres, ...over });
+  assert.ok(!isGem(atLimit({ popularity: 40_000 }), gemScoreOf(atLimit({ popularity: 40_000 }), aff, qualityOf(atLimit({ popularity: 40_000 })))));
+  assert.ok(isGem(atLimit({ popularity: 39_999 }), gemScoreOf(atLimit({ popularity: 39_999 }), aff, qualityOf(atLimit({ popularity: 39_999 })))));
+  assert.ok(!isGem(atLimit({ averageScore: 71 }), gemScoreOf(atLimit({ averageScore: 71 }), aff, qualityOf(atLimit({ averageScore: 71 })))));
+  assert.ok(isGem(atLimit({ averageScore: 72 }), gemScoreOf(atLimit({ averageScore: 72 }), aff, qualityOf(atLimit({ averageScore: 72 })))));
 });
 
 test("scoreAll: community bonus capped, next step bonus applied, sorted by final", () => {
@@ -99,26 +120,63 @@ test("scoreAll: community bonus capped, next step bonus applied, sorted by final
 });
 
 test("dedupeFranchises: one representative per franchise, groupSize annotated", () => {
+  // natural ranking: media(2) beats media(1) via higher score — no mutation
   const recos = scoreAll(
-    [media(1), media(2), media(3)],
+    [
+      media(1, { averageScore: 60 }),
+      media(2, { averageScore: 95 }),
+      media(3, { averageScore: 70 }),
+      media(4, { averageScore: 65 }),
+      media(5, { averageScore: 68 }),
+    ],
     profile,
     new Map(),
     new Map<number, FranchiseInfo>([
       [1, { kind: "NEXT_STEP", rootId: 100, entryPointId: null, droppedId: null }],
       [2, { kind: "NEXT_STEP", rootId: 100, entryPointId: null, droppedId: null }],
       [3, { kind: "STANDALONE", rootId: 3, entryPointId: null, droppedId: null }],
+      [4, { kind: "NEXT_STEP", rootId: 200, entryPointId: null, droppedId: null }],
+      [5, { kind: "NEXT_STEP", rootId: 200, entryPointId: null, droppedId: null }],
     ]),
     "en",
   );
-  // force media(2) to win the franchise
-  recos[1].final = 0.99;
-  recos.sort((a, b) => b.final - a.final);
   const deduped = dedupeFranchises(recos);
-  assert.equal(deduped.length, 2);
-  const franchiseRep = deduped.find((r) => r.media.id === 2);
-  assert.equal(franchiseRep?.groupSize, 2);
+  assert.equal(deduped.length, 3, "5 candidates in 2 franchises + 1 standalone");
+  const repA = deduped.find((r) => r.media.id === 2);
+  assert.equal(repA?.groupSize, 2, "franchise 100 keeps its best member with groupSize 2");
+  const repB = deduped.find((r) => r.media.id === 5);
+  assert.equal(repB?.groupSize, 2);
   const standalone = deduped.find((r) => r.media.id === 3);
   assert.equal(standalone?.groupSize, 1);
+  assert.ok(deduped.every((r) => deduped.indexOf(r) === deduped.length - 1 || deduped[deduped.indexOf(r)].final >= deduped[deduped.indexOf(r) + 1].final));
+});
+
+test("scoreAll: ENTRY_POINT gets the badge but no franchise bonus; spin-offs badge only", () => {
+  const twin = (id: number, relations: MediaLite["relations"]): MediaLite =>
+    media(id, {
+      tags: [{ name: "Psychological", rank: 90, isSpoiler: false }],
+      genres: ["Mystery"],
+      relations,
+    });
+  const candidates = [
+    twin(1, []), // next step
+    twin(2, []), // entry point
+    media(3, { relations: [{ id: 50, relationType: "SPIN_OFF" }], genres: ["Isekai"] }), // spin-off, disliked genre
+  ];
+  const franchise = new Map<number, FranchiseInfo>([
+    [1, { kind: "NEXT_STEP", rootId: 1, entryPointId: null, droppedId: null }],
+    [2, { kind: "ENTRY_POINT", rootId: 2, entryPointId: 2, droppedId: null }],
+    [3, { kind: "STANDALONE", rootId: 3, entryPointId: null, droppedId: null }],
+  ]);
+  const recos = scoreAll(candidates, profile, new Map(), franchise, "en");
+  const next = recos.find((r) => r.media.id === 1)!;
+  const entry = recos.find((r) => r.media.id === 2)!;
+  const spin = recos.find((r) => r.media.id === 3)!;
+  assert.deepEqual(entry.badges, ["ENTRY_POINT"]);
+  assert.deepEqual(next.badges, ["NEXT_STEP"]);
+  assert.ok(entry.final < next.final, "ENTRY_POINT must not receive the +0.12 franchise bonus");
+  assert.ok(spin.badges.includes("SPIN_OFF"));
+  assert.ok(!spin.badges.includes("NEXT_STEP"));
 });
 
 test("franchise: dropped prequel excludes sequel (analyzeFranchises)", () => {
@@ -185,5 +243,30 @@ test("franchise: relation cycle does not hang", () => {
   ];
   const info = analyzeFranchises(candidates, new Map());
   assert.equal(info.size, 2);
-  assert.ok(info.get(501));
+  // both members share one canonical root → dedupeFranchises collapses them
+  assert.equal(info.get(501)?.rootId, info.get(502)?.rootId);
+  assert.equal(info.get(501)?.kind, "ENTRY_POINT");
+  assert.equal(info.get(501)?.entryPointId, 502);
+});
+
+test("franchise: long chain (13 prequels) keeps one canonical root", () => {
+  const candidates: MediaLite[] = [];
+  for (let id = 1; id <= 13; id++) {
+    candidates.push(
+      media(id, { relations: id > 1 ? [{ id: id - 1, relationType: "PREQUEL" }] : [] }),
+    );
+  }
+  const listMap = new Map<number, ListEntry>();
+  for (let id = 3; id <= 13; id++) {
+    listMap.set(id, { mediaId: id, status: "COMPLETED", score: 80, repeat: 0, title: `s${id}` });
+  }
+  const info = analyzeFranchises(candidates, listMap);
+  const roots = new Set([...info.values()].map((f) => f.rootId));
+  assert.equal(roots.size, 1, `all 13 members must share one root, got ${[...roots]}`);
+  assert.equal(info.get(1)?.rootId, 1);
+  assert.equal(info.get(13)?.kind, "ENTRY_POINT");
+  assert.equal(info.get(13)?.entryPointId, 1, "first unseen from root side");
+  // even mid-chain members collapse to the same entry point
+  assert.equal(info.get(12)?.kind, "ENTRY_POINT");
+  assert.equal(info.get(12)?.entryPointId, 1);
 });

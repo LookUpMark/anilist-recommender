@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { tr, type Lang } from "../../shared/strings.ts";
 import type { SetupStatus } from "../../shared/types.ts";
 import { fetchSetupStatus, postSetup } from "../api.ts";
@@ -19,38 +19,74 @@ export function SetupWizard(props: {
   const { lang } = props;
   const [status, setStatus] = useState<SetupStatus>(props.initial);
   const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
   const [model, setModel] = useState<string>(props.initial.suggested.model);
   const [customOpen, setCustomOpen] = useState(false);
   const [customUrl, setCustomUrl] = useState("");
+  const pollReq = useRef(0);
 
-  // poll while the wizard is open: job progress + backend state
+  // poll while the wizard is open: job progress + backend state (drop stale responses)
   useEffect(() => {
     const t = setInterval(() => {
+      const req = ++pollReq.current;
       fetchSetupStatus()
-        .then(setStatus)
+        .then((s) => {
+          if (req === pollReq.current) setStatus(s);
+        })
         .catch(() => undefined);
     }, 1500);
     return () => clearInterval(t);
   }, []);
 
-  // once the chosen model shows up in lms ls, move to the finish screen
+  // step derives from server truth: the download job IS the progress screen
   const downloaded = status.downloadedModels.some(
     (m) => m.includes(model) || model.includes(m),
   );
-  const step = status.setupDone ? 3 : downloaded ? 2 : 1;
+  const step = status.setupDone
+    ? 3
+    : status.job.state === "downloading" || status.job.state === "installing-cli"
+      ? 2
+      : downloaded
+        ? 2
+        : 1;
 
   async function finish(body: object) {
     setBusy(true);
+    setErr(null);
     try {
       await postSetup("finish", body);
-      const s = await fetchSetupStatus();
-      setStatus(s);
+      setStatus(await fetchSetupStatus());
+    } catch (e) {
+      setErr(String((e as Error).message));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function download() {
+    setBusy(true);
+    setErr(null);
+    try {
+      await postSetup("download", { model }); // job singleton drives step 2
+      setStatus(await fetchSetupStatus());
+    } catch (e) {
+      setErr(String((e as Error).message));
     } finally {
       setBusy(false);
     }
   }
 
   const jobBusy = status.job.state === "downloading" || status.job.state === "installing-cli";
+
+  // job finished (or model already on disk) → auto-complete the setup once
+  const finishedRef = useRef(false);
+  const modelDone = status.job.state === "done" || (downloaded && status.job.state === "idle");
+  useEffect(() => {
+    if (finishedRef.current || busy || status.setupDone || !modelDone) return;
+    finishedRef.current = true;
+    void finish({ model });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [modelDone, status.setupDone, busy]);
 
   return (
     <main className="app wizard">
@@ -120,7 +156,7 @@ export function SetupWizard(props: {
             <div className="action-row">
               <button
                 disabled={busy || !status.lms.installed}
-                onClick={() => finish({ model })}
+                onClick={download}
               >
                 {tr(lang, "download")}
               </button>
@@ -189,6 +225,7 @@ export function SetupWizard(props: {
           >
             {tr(lang, "skipSetup")}
           </button>
+          {err && <p className="error">{err}</p>}
           {status.job.state === "error" && (
             <p className="error">
               {tr(lang, "downloadFailed")} {status.job.error}

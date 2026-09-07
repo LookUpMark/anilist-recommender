@@ -3,9 +3,16 @@
 // Requires the AniList API to be reachable. Writes fixtures/{userlist,candidates,recommendations}.json
 import { writeFile, mkdir } from "node:fs/promises";
 import { join } from "node:path";
-import { fetchUserList, fetchRecommendations } from "../src/server/anilist.ts";
-import { fetchCandidates } from "../src/server/candidates.ts";
-import { buildProfile, entrySentiment } from "../src/server/profile.ts";
+
+// must run BEFORE the server modules import config.ts
+if (process.env.ANILIST_FIXTURES) {
+  console.error("ANILIST_FIXTURES must be unset to record real fixtures");
+  process.exit(1);
+}
+
+const { fetchUserList, fetchRecommendations } = await import("../src/server/anilist.ts");
+const { fetchCandidates } = await import("../src/server/candidates.ts");
+const { buildProfile, entrySentiment } = await import("../src/server/profile.ts");
 
 const username = process.argv[2];
 if (!username) {
@@ -29,9 +36,17 @@ const top5 = [...entries]
   .sort((a, b) => b.s - a.s)
   .slice(0, 5);
 const recMap = {};
+let recFails = 0;
 for (const { e } of top5) {
-  const recs = await fetchRecommendations(e.mediaId).catch(() => []);
+  const recs = await fetchRecommendations(e.mediaId).catch(() => {
+    recFails++;
+    return [];
+  });
   if (recs.length > 0) recMap[String(e.mediaId)] = recs;
+}
+if (recFails > 0) {
+  console.error(`${recFails}/${top5.length} recommendation fetches failed — fixtures are partial`);
+  process.exitCode = 1;
 }
 
 await mkdir("fixtures", { recursive: true });

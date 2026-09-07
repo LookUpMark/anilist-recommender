@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import { mkdir, readFile, writeFile } from "node:fs/promises";
+import { mkdir, readFile, rename, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import type { Explanation, Lang, ScoredReco, TasteProfile } from "../shared/types.ts";
 import { CACHE_DIR, CACHE_TTL_EXPL_MS, llmBaseUrl, llmModel, LLM_TIMEOUT_MS } from "./config.ts";
@@ -19,12 +19,16 @@ async function llmChat(messages: { role: string; content: string }[]): Promise<s
   const res = await fetch(`${llmBaseUrl()}/chat/completions`, {
     method: "POST",
     headers: { "content-type": "application/json" },
-    body: JSON.stringify({ model: llmModel(), messages, temperature: 0.3 }),
+    body: JSON.stringify({ model: llmModel(), messages, temperature: 0.3, max_tokens: 2000 }),
     signal: AbortSignal.timeout(LLM_TIMEOUT_MS),
   });
   if (!res.ok) throw new Error(`LLM HTTP ${res.status}`);
-  const json = (await res.json()) as { choices?: { message?: { content?: string } }[] };
-  return json.choices?.[0]?.message?.content ?? "";
+  const json = (await res.json()) as {
+    choices?: { message?: { content?: string }; finish_reason?: string }[];
+  };
+  const choice = json.choices?.[0];
+  if (choice?.finish_reason === "length") throw new Error("LLM output truncated (finish_reason=length)");
+  return choice?.message?.content ?? "";
 }
 
 const LANG_NAME: Record<Lang, string> = { en: "English", it: "Italian" };
@@ -59,15 +63,39 @@ function buildPrompt(recos: ScoredReco[], profile: TasteProfile, lang: Lang): st
   );
 }
 
-/** Extract the JSON array even when the model wraps it in prose or fences. */
-function parseExplanations(raw: string): { id: number; why: string }[] {
+/** Extract the first balanced JSON array even when the model wraps it in prose/fences. */
+export function parseExplanations(raw: string): { id: number; why: string }[] {
   const start = raw.indexOf("[");
-  const end = raw.lastIndexOf("]");
-  if (start === -1 || end <= start) return [];
+  if (start === -1) return [];
+  // depth scan to the matching ] (string-aware): lastIndexOf can splice two arrays
+  let depth = 0;
+  let inString = false;
+  let end = -1;
+  for (let i = start; i < raw.length; i++) {
+    const ch = raw[i];
+    if (inString) {
+      if (ch === "\\") i++;
+      else if (ch === '"') inString = false;
+    } else if (ch === '"') inString = true;
+    else if (ch === "[") depth++;
+    else if (ch === "]") {
+      depth--;
+      if (depth === 0) {
+        end = i;
+        break;
+      }
+    }
+  }
+  if (end === -1) return [];
   try {
-    const arr = JSON.parse(raw.slice(start, end + 1)) as { id: number; why: string }[];
+    const arr = JSON.parse(raw.slice(start, end + 1)) as { id?: unknown; why?: unknown }[];
     return Array.isArray(arr)
-      ? arr.filter((x) => typeof x?.id === "number" && typeof x?.why === "string")
+      ? arr
+          .map((x) => ({ id: typeof x?.id === "number" ? x.id : Number(x?.id), why: x?.why }))
+          .filter(
+            (x): x is { id: number; why: string } =>
+              x.id !== null && Number.isInteger(x.id) && typeof x.why === "string",
+          )
       : [];
   } catch {
     return [];
@@ -86,10 +114,10 @@ async function cacheGet(key: string): Promise<Record<string, string> | null> {
 
 async function cacheSet(key: string, items: Record<string, string>): Promise<void> {
   await mkdir(EXPL_DIR, { recursive: true });
-  await writeFile(
-    join(EXPL_DIR, `${key}.json`),
-    JSON.stringify({ exp: Date.now() + CACHE_TTL_EXPL_MS, items }),
-  );
+  const file = join(EXPL_DIR, `${key}.json`);
+  const tmp = `${file}.tmp`;
+  await writeFile(tmp, JSON.stringify({ exp: Date.now() + CACHE_TTL_EXPL_MS, items }));
+  await rename(tmp, file); // atomic swap — no partial reads
 }
 
 /**
@@ -129,14 +157,12 @@ export async function explainRecos(
       for (const e of parseExplanations(raw)) {
         const reco = batch.find((r) => r.media.id === e.id);
         const text = e.why.trim();
+        // only genuine LLM output is cached — caching deterministic fallbacks would
+        // mask model failures as source:"cache" for a week
         if (reco && text.length > 0) {
           out.set(e.id, { text, source: "llm" });
           fresh.set(String(e.id), text);
         }
-      }
-      // cache fallbacks too so the whole batch is served from cache next time
-      for (const r of batch) {
-        if (!fresh.has(String(r.media.id))) fresh.set(String(r.media.id), r.why);
       }
     }
     if (fresh.size > 0) await cacheSet(key, { ...(cached ?? {}), ...Object.fromEntries(fresh) });

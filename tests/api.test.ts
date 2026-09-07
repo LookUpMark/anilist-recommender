@@ -1,16 +1,24 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { spawn } from "node:child_process";
+import { once } from "node:events";
+import { createServer } from "node:http";
 import { join } from "node:path";
 
-const PORT = 4790;
-const BASE = `http://127.0.0.1:${PORT}`;
+/** Bind :0, read the port, release — no fixed-port collisions across test files. */
+async function freePort(): Promise<number> {
+  const s = createServer();
+  await new Promise<void>((r) => s.listen(0, "127.0.0.1", () => r()));
+  const port = (s.address() as { port: number }).port;
+  await new Promise<void>((r) => s.close(() => r()));
+  return port;
+}
 
-async function waitForServer(timeoutMs = 15000): Promise<void> {
+async function waitForServer(base: string, timeoutMs = 15000): Promise<void> {
   const deadline = Date.now() + timeoutMs;
   while (Date.now() < deadline) {
     try {
-      const res = await fetch(`${BASE}/api/health`);
+      const res = await fetch(`${base}/api/health`);
       if (res.ok) return;
     } catch {
       /* not up yet */
@@ -21,6 +29,8 @@ async function waitForServer(timeoutMs = 15000): Promise<void> {
 }
 
 test("API smoke: fixture mode serves profile, recommendations, graceful LLM fallback", async () => {
+  const PORT = await freePort();
+  const BASE = `http://127.0.0.1:${PORT}`;
   const child = spawn(process.execPath, ["src/server/index.ts"], {
     cwd: join(import.meta.dirname, ".."),
     env: {
@@ -29,10 +39,16 @@ test("API smoke: fixture mode serves profile, recommendations, graceful LLM fall
       PORT: String(PORT),
       LLM_BASE_URL: "http://127.0.0.1:59999/v1", // unreachable → graceful fallback
     },
-    stdio: "ignore",
+    stdio: ["ignore", "pipe", "pipe"],
   });
+  const childErr: string[] = [];
+  child.stderr!.on("data", (c: Buffer) => childErr.push(c.toString()));
   try {
-    await waitForServer();
+    await waitForServer(BASE).catch(async (e) => {
+      child.kill("SIGTERM");
+      await once(child, "exit").catch(() => undefined);
+      throw new Error(`${(e as Error).message}\nstderr: ${childErr.join("").slice(-800)}`);
+    });
 
     const health = await (await fetch(`${BASE}/api/health`)).json();
     assert.equal(health.ok, true);
@@ -93,5 +109,6 @@ test("API smoke: fixture mode serves profile, recommendations, graceful LLM fall
     assert.equal(bad.status, 400);
   } finally {
     child.kill("SIGTERM");
+    await once(child, "exit").catch(() => undefined); // no orphan port for the next run
   }
 });

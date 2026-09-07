@@ -3,11 +3,12 @@ import { tr } from "../../shared/strings.ts";
 import type { ScoredReco } from "../../shared/types.ts";
 
 function MiniBar(props: { label: string; value: number }) {
+  const pct = Math.min(100, Math.max(0, Math.round(props.value * 100)));
   return (
     <div className="mini" title={props.label}>
       <span className="mini-label">{props.label}</span>
       <span className="mini-bar">
-        <span style={{ width: `${Math.round(props.value * 100)}%` }} />
+        <span style={{ width: `${pct}%` }} />
       </span>
     </div>
   );
@@ -54,7 +55,7 @@ export function RecoCard(props: { reco: ScoredReco; lang: Lang }) {
         <div className="minis">
           <MiniBar label={tr(lang, "affinity")} value={r.breakdown.affinity} />
           <MiniBar label={tr(lang, "quality")} value={r.breakdown.quality} />
-          <MiniBar label={tr(lang, "community")} value={r.breakdown.community * 10} />
+          <MiniBar label={tr(lang, "community")} value={r.breakdown.community / 0.1} />
         </div>
         <p className="why">{r.why}</p>
       </div>

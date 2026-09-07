@@ -2,6 +2,7 @@ import { spawn, spawnSync } from "node:child_process";
 import { appendFileSync, existsSync, mkdirSync, unlinkSync } from "node:fs";
 import { homedir, platform, arch, totalmem, cpus } from "node:os";
 import { join } from "node:path";
+import { fileURLToPath } from "node:url";
 import { Hono } from "hono";
 import {
   CONFIG_PATH,
@@ -10,8 +11,10 @@ import {
   updateConfig,
   type AppConfig,
 } from "./config.ts";
+import type { SetupHardware, SetupStatus } from "../shared/types.ts";
 
-const LLM_LOG = new URL("../../data/llm.log", import.meta.url).pathname;
+const DATA_DIR = fileURLToPath(new URL("../../data/", import.meta.url)); // survives spaces in path
+const LLM_LOG = join(DATA_DIR, "llm.log");
 
 // --- model catalogue (verified 2026-09-07, Apache 2.0, prism-ml on HF) ----------
 
@@ -20,16 +23,12 @@ export const MODELS = {
   b8: { model: "prism-ml/Bonsai-8B-gguf", sizeGb: 1.16 },
 } as const;
 const RAM_TRESHOLD_GB = 16; // 27B peaks at 5.2 GB @4K ctx — 16 GB machines are comfy
-const LMSTUDIO_BASE = "http://127.0.0.1:1234/v1";
+// overridable so tests (and port-conflicted setups) can point elsewhere
+export const LMSTUDIO_BASE = process.env.LMSTUDIO_BASE_URL ?? "http://127.0.0.1:1234/v1";
 
 // --- hardware -------------------------------------------------------------------
 
-export interface Hardware {
-  os: "mac" | "win" | "linux";
-  chip: string;
-  ramGb: number;
-  appleSilicon: boolean;
-}
+export type Hardware = SetupHardware;
 
 export function detectHardware(): Hardware {
   const os = platform() === "darwin" ? "mac" : platform() === "win32" ? "win" : "linux";
@@ -37,7 +36,7 @@ export function detectHardware(): Hardware {
   if (os === "mac" && !appleSilicon) {
     // Rosetta caveat: node may report x64 on Apple Silicon
     const { stdout } = spawnSync("sysctl", ["-n", "machdep.cpu.brand_string"], { encoding: "utf8" });
-    appleSilicon = stdout.includes("Apple");
+    appleSilicon = typeof stdout === "string" && stdout.includes("Apple");
   }
   const chip = cpus()[0]?.model?.trim() || "Unknown CPU";
   return { os, chip, ramGb: Math.round(totalmem() / 2 ** 30), appleSilicon };
@@ -84,7 +83,7 @@ export function resolveLms(): string | null {
 
 const log = (line: string): void => {
   try {
-    mkdirSync(new URL("../data/", import.meta.url).pathname, { recursive: true });
+    mkdirSync(DATA_DIR, { recursive: true });
     appendFileSync(LLM_LOG, `${new Date().toISOString()} ${line}\n`);
   } catch {
     /* logging must never crash the app */
@@ -108,7 +107,8 @@ interface RunResult {
 
 /**
  * Spawn lms (array args, no shell), collect output, log it. Never throws on
- * nonzero exit — the caller decides via the returned code. Timeout kills.
+ * nonzero exit — the caller decides via the returned code. Timeout: SIGTERM,
+ * then SIGKILL after a grace window; the promise always settles.
  */
 function runLms(lms: string, args: string[], timeoutMs = 60_000): Promise<RunResult> {
   log(`$ ${lms} ${args.join(" ")}`);
@@ -117,12 +117,26 @@ function runLms(lms: string, args: string[], timeoutMs = 60_000): Promise<RunRes
     let stdout = "";
     let stderr = "";
     let done = false;
+    const settle = (code: number | null) => {
+      if (done) return;
+      done = true;
+      clearTimeout(killer);
+      resolve({ code, stdout, stderr });
+    };
     const timer = setTimeout(() => {
       if (!done) {
-        log(`timeout dopo ${timeoutMs}ms`);
+        log(`timeout dopo ${timeoutMs}ms — SIGTERM`);
         child.kill("SIGTERM");
       }
     }, timeoutMs);
+    // SIGTERM ignored (or children keeping pipes open) → hard kill + settle anyway
+    const killer = setTimeout(() => {
+      if (!done) {
+        log("SIGTERM ignorato — SIGKILL");
+        child.kill("SIGKILL");
+      }
+    }, timeoutMs + 5000);
+    setTimeout(() => settle(-1), timeoutMs + 15000); // last resort: promise must settle
     child.stdout.on("data", (c: Buffer) => {
       stdout += c;
       jobFeed(c.toString());
@@ -132,16 +146,11 @@ function runLms(lms: string, args: string[], timeoutMs = 60_000): Promise<RunRes
       jobFeed(c.toString());
     });
     child.on("error", (e) => {
-      done = true;
-      clearTimeout(timer);
       log(`spawn error: ${e.message}`);
-      resolve({ code: -1, stdout, stderr: `${stderr}${e.message}` });
+      stderr += e.message;
+      settle(-1);
     });
-    child.on("close", (code) => {
-      done = true;
-      clearTimeout(timer);
-      resolve({ code, stdout, stderr });
-    });
+    child.on("close", (code) => settle(code));
   });
 }
 
@@ -157,17 +166,19 @@ export interface SetupJob {
 }
 
 let job: SetupJob = { state: "idle", model: null, logTail: "" };
+const jobActive = (): boolean => job.state === "downloading" || job.state === "installing-cli";
 
 /** Feed the wizard's log view; ring buffer keeps the last ~2 KB. */
 function jobFeed(text: string): void {
-  if (job.state !== "downloading" && job.state !== "installing-cli") return;
+  if (!jobActive()) return;
   job.logTail = (job.logTail + text).slice(-2000);
 }
 
-const MODEL_KEY_RE = /^[A-Za-z0-9._/-]+$/;
+// model keys are HF-style org/repo; require it to start alphanumeric (no ".."-leading tricks)
+const MODEL_KEY_RE = /^[A-Za-z0-9][A-Za-z0-9._/-]*$/;
 
 export function startDownload(model: string): void {
-  if (job.state === "downloading" || job.state === "installing-cli") throw new Error("busy");
+  if (jobActive()) throw new Error("busy");
   if (!MODEL_KEY_RE.test(model)) throw new Error("invalid_model");
   const lms = resolveLms();
   if (!lms) throw new Error("lms_missing");
@@ -185,16 +196,16 @@ export function startDownload(model: string): void {
 
 /** SECURITY NOTE: fixed official install scripts, never interpolated — see plan. */
 export function installCli(): void {
-  if (job.state === "downloading" || job.state === "installing-cli") throw new Error("busy");
+  if (jobActive()) throw new Error("busy");
   const os = detectHardware().os;
   if (os === "win") {
     job = { state: "installing-cli", model: null, logTail: "" };
     // fixed string on purpose: official LM Studio PowerShell installer
-    void runInstall(["powershell", "-NoProfile", "-Command", "irm https://lmstudio.ai/install.ps1 | iex"]);
+    runInstall(["powershell", "-NoProfile", "-Command", "irm https://lmstudio.ai/install.ps1 | iex"]);
   } else if (os === "mac") {
     job = { state: "installing-cli", model: null, logTail: "" };
     // fixed string on purpose: official LM Studio bash installer
-    void runInstall(["bash", "-c", "curl -fsSL https://lmstudio.ai/install.sh | bash"]);
+    runInstall(["bash", "-c", "curl -fsSL https://lmstudio.ai/install.sh | bash"]);
   } else {
     job = { state: "error", model: null, logTail: "", error: "unsupported OS — try: npx lmstudio install-cli" };
   }
@@ -202,14 +213,28 @@ export function installCli(): void {
 
 function runInstall(cmd: string[]): void {
   const child = spawn(cmd[0]!, cmd.slice(1), { stdio: ["ignore", "pipe", "pipe"] });
+  let done = false;
+  const finish = (state: JobState, error?: string): void => {
+    if (done) return;
+    done = true;
+    job = { state, model: null, logTail: job.logTail, ...(error ? { error } : {}) };
+  };
+  // installer must never wedge the job singleton: 10 min then hard stop
+  const timer = setTimeout(() => {
+    child.kill("SIGTERM");
+    setTimeout(() => child.kill("SIGKILL"), 5000);
+    setTimeout(() => finish("error", "installer timed out (10 min)"), 6500);
+  }, 10 * 60 * 1000);
   child.stdout.on("data", (c: Buffer) => jobFeed(c.toString()));
   child.stderr.on("data", (c: Buffer) => jobFeed(c.toString()));
   child.on("error", (e) => {
-    job = { state: "error", model: null, logTail: job.logTail, error: e.message };
+    clearTimeout(timer);
+    finish("error", e.message);
   });
   child.on("close", (code) => {
-    if (code === 0) job = { state: "done", model: null, logTail: job.logTail };
-    else job = { state: "error", model: null, logTail: job.logTail, error: `exit ${code}` };
+    clearTimeout(timer);
+    if (code === 0) finish("done");
+    else finish("error", `exit ${code}`);
   });
 }
 
@@ -266,7 +291,19 @@ async function run(): Promise<void> {
     return;
   }
   const ls = await runLms(lms, ["ls", "--json"], 30_000);
-  if (!ls.stdout.includes(cfg.model!)) {
+  let installed = false;
+  try {
+    const parsed = JSON.parse(ls.stdout) as { models?: { key?: string; path?: string }[] };
+    installed = (parsed.models ?? []).some((m) => (m.key ?? m.path) === cfg.model);
+  } catch {
+    /* unparseable output — treat as absent */
+  }
+  if (!installed) {
+    if (jobActive()) {
+      log("un download del wizard è già in corso — salto l'auto-get");
+      backendState = "off";
+      return;
+    }
     log(`modello ${cfg.model} assente — lo scarico (può volerci molto)`);
     const dl = await runLms(lms, ["get", cfg.model!, cfg.model!.includes("-mlx") ? "--mlx" : "--gguf"], 60 * 60 * 1000);
     if (dl.code !== 0) {
@@ -276,7 +313,12 @@ async function run(): Promise<void> {
     }
   }
   const load = await runLms(lms, ["load", cfg.model!, "-y", "--gpu=max", "--context-length=8192"], 180_000);
-  if (load.code !== 0) log(`load: exit ${load.code} — ${load.stderr.slice(-200)}`);
+  if (load.code !== 0) {
+    // a 200 on /v1/models means nothing if the model failed to load — stay off
+    log(`load: exit ${load.code} — ${load.stderr.slice(-200)}`);
+    backendState = "off";
+    return;
+  }
   for (let i = 0; i < 10 && !(await httpOk(`${base}/models`, 2000)); i++) {
     await new Promise((r) => setTimeout(r, 2000));
   }
@@ -292,6 +334,7 @@ async function downloadedModels(lms: string | null): Promise<string[]> {
   if (!lms) return [];
   if (lsCache && Date.now() - lsCache.at < 10_000) return lsCache.models;
   const ls = await runLms(lms, ["ls", "--json"], 15_000);
+  if (ls.code !== 0) return lsCache?.models ?? []; // don't cache failures
   let models: string[] = [];
   try {
     const parsed = JSON.parse(ls.stdout) as { models?: { path?: string; key?: string }[] };
@@ -299,7 +342,8 @@ async function downloadedModels(lms: string | null): Promise<string[]> {
       .map((m) => m.key ?? m.path ?? "")
       .filter((s) => s.length > 0);
   } catch {
-    /* non-json output (older lms) — treat as unknown */
+    /* non-json output (older lms) — treat as unknown, uncached */
+    return lsCache?.models ?? [];
   }
   lsCache = { at: Date.now(), models };
   return models;
@@ -309,27 +353,33 @@ async function downloadedModels(lms: string | null): Promise<string[]> {
 
 export const setupRoutes = new Hono();
 
+/** Backend state reconciled with a live probe at read time, so the two never disagree. */
+function reportedLlmState(serverUp: boolean): BackendState {
+  if (serverUp) return "up";
+  return backendState === "starting" ? "starting" : "off";
+}
+
 setupRoutes.get("/status", async (c) => {
   const cfg = readConfigFile();
   const hw = detectHardware();
   const lms = resolveLms();
   const [models, serverUp] = await Promise.all([
-    job.state === "downloading" ? [] : downloadedModels(lms),
-    httpOk(`${llmBase(cfg)}/models`, 1000),
+    jobActive() ? [] : downloadedModels(lms),
+    httpOk(`${cfg.baseUrl ?? LMSTUDIO_BASE}/models`, 1000),
   ]);
-  return c.json({
+  // disclosure-minimal: no absolute binary path, no raw env details beyond hw summary
+  const status: SetupStatus = {
     setupDone: Boolean(cfg.setupDone),
     customEnv: hasCustomEnv(),
     hardware: hw,
     suggested: suggestModel(hw),
-    lms: { installed: lms != null, path: lms, serverUp },
+    lms: { installed: lms != null, path: null, serverUp },
     downloadedModels: models,
     job,
-    llm: { state: backendState },
-  });
+    llm: { state: reportedLlmState(serverUp) },
+  };
+  return c.json(status);
 });
-
-const llmBase = (cfg: AppConfig): string => cfg.baseUrl ?? LMSTUDIO_BASE;
 
 setupRoutes.post("/install-cli", (c) => {
   try {
@@ -361,14 +411,17 @@ setupRoutes.post("/finish", async (c) => {
     updateConfig({ setupDone: true, backend: "skipped" });
     return c.json({ ok: true });
   }
+  if (body.model != null && !MODEL_KEY_RE.test(body.model)) {
+    return c.json({ error: "invalid_model" }, 400);
+  }
   if (body.baseUrl != null) {
     if (!/^https?:\/\/[\w.:/-]+$/.test(body.baseUrl)) return c.json({ error: "invalid_url" }, 400);
     const patch: AppConfig = { setupDone: true, backend: "custom", baseUrl: body.baseUrl };
-    if (body.model && MODEL_KEY_RE.test(body.model)) patch.model = body.model;
+    if (body.model) patch.model = body.model;
     updateConfig(patch);
     return c.json({ ok: true });
   }
-  if (!body.model || !MODEL_KEY_RE.test(body.model)) return c.json({ error: "invalid_model" }, 400);
+  if (!body.model) return c.json({ error: "invalid_model" }, 400);
   const lms = resolveLms();
   if (!lms) return c.json({ error: "lms_missing" }, 400);
   updateConfig({
@@ -385,8 +438,14 @@ setupRoutes.post("/finish", async (c) => {
 setupRoutes.post("/reset", (c) => {
   try {
     unlinkSync(CONFIG_PATH);
-  } catch {
-    /* already gone */
+  } catch (e) {
+    if ((e as NodeJS.ErrnoException).code !== "ENOENT") {
+      return c.json({ error: "reset_failed" }, 500);
+    }
   }
+  // reset shared state too, so the app truly returns to pre-setup
+  updateConfig({});
+  job = { state: "idle", model: null, logTail: "" };
+  lsCache = null;
   return c.json({ ok: true });
 });

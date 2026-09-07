@@ -24,6 +24,9 @@ export function UsernameForm(props: {
           autoFocus
           autoComplete="off"
           spellCheck={false}
+          maxLength={32}
+          aria-invalid={!valid && value.length > 0}
+          aria-describedby="username-hint"
           placeholder="Josh"
           onChange={(e) => setValue(e.target.value)}
         />
@@ -31,6 +34,11 @@ export function UsernameForm(props: {
           {tr(props.lang, "go")}
         </button>
       </div>
+      <p id="username-hint" className="hint" role="status">
+        {valid || value.length === 0
+          ? "A-Z a-z 0-9 _ - · max 32"
+          : tr(props.lang, "errUserNotFound")}
+      </p>
     </form>
   );
 }

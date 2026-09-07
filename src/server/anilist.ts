@@ -81,7 +81,7 @@ query ($id: Int) {
 
 let tokens = 3;
 let lastRefill = Date.now();
-const refillPerSec = RATE_PER_MIN / 60;
+const refillPerSec = Math.max(0.1, RATE_PER_MIN / 60);
 
 async function takeToken(): Promise<void> {
   for (;;) {
@@ -100,6 +100,9 @@ const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
 // --- disk cache ----------------------------------------------------------------
 
+// concurrent identical lookups share one in-flight request
+const inflight = new Map<string, Promise<unknown>>();
+
 async function cacheWrap<T>(key: string, ttlMs: number, fn: () => Promise<T>): Promise<T> {
   const file = join(CACHE_DIR, `${createHash("sha256").update(key).digest("hex")}.json`);
   try {
@@ -108,7 +111,9 @@ async function cacheWrap<T>(key: string, ttlMs: number, fn: () => Promise<T>): P
   } catch {
     /* miss */
   }
-  const data = await fn();
+  const p = inflight.get(file) ?? fn().finally(() => inflight.delete(file));
+  inflight.set(file, p);
+  const data = (await p) as T;
   await mkdir(CACHE_DIR, { recursive: true });
   await writeFile(file, JSON.stringify({ exp: Date.now() + ttlMs, data }));
   return data;
@@ -136,15 +141,27 @@ async function gql<T>(query: string, variables: object, ttlMs: number): Promise<
         throw new AniListError(`AniList unreachable: ${(e as Error).message}`, 502);
       }
       if (res.status === 429) {
-        const retryAfter = Number(res.headers.get("retry-after") ?? 5);
-        await sleep(Math.min(retryAfter, 60) * 1000);
+        if (attempt >= 10) throw new AniListError("AniList rate-limited for too long", 429);
+        const raw = Number(res.headers.get("retry-after"));
+        // bounded: never hammer AniList (ToS) — cap 10 rounds, sanitized delay
+        await sleep((Number.isFinite(raw) && raw > 0 ? Math.min(raw, 60) : 5) * 1000);
         continue;
       }
       if (res.status >= 500 && attempt < 3) {
         await sleep(1000 * 2 ** attempt);
         continue;
       }
-      const json = (await res.json()) as { data?: T; errors?: { message: string; status?: number }[] };
+      let json: { data?: T; errors?: { message: string; status?: number }[] };
+      try {
+        json = (await res.json()) as typeof json;
+      } catch {
+        if (attempt < 3) {
+          await sleep(1000 * 2 ** attempt);
+          attempt++;
+          continue;
+        }
+        throw new AniListError(`AniList HTTP ${res.status} (non-JSON body)`, res.status);
+      }
       if (json.errors?.length) {
         const e = json.errors[0];
         throw new AniListError(e.message, e.status ?? res.status);
@@ -159,7 +176,7 @@ async function gql<T>(query: string, variables: object, ttlMs: number): Promise<
 
 type RawMedia = {
   id: number;
-  title: { romaji: string };
+  title: { romaji?: string; english?: string };
   format: string | null;
   seasonYear: number | null;
   genres: string[];
@@ -176,7 +193,7 @@ type RawMedia = {
 export function mapMedia(m: RawMedia): MediaLite {
   return {
     id: m.id,
-    title: m.title.romaji,
+    title: m.title?.romaji ?? m.title?.english ?? `(id ${m.id})`,
     format: m.format,
     seasonYear: m.seasonYear,
     genres: m.genres ?? [],
@@ -244,7 +261,7 @@ export async function fetchUserList(userName: string): Promise<UserList> {
             status: e.status,
             score: e.score ?? 0,
             repeat: e.repeat ?? 0,
-            title: e.media.title.romaji,
+            title: e.media.title?.romaji ?? e.media.title?.english ?? `(${e.media.id})`,
             custom: list.isCustomList,
           });
           media.set(e.media.id, mapMedia(e.media));
@@ -293,12 +310,17 @@ export async function fetchMediaByIds(ids: number[]): Promise<MediaLite[]> {
     const all = await readFixture<MediaLite[]>("candidates.json");
     return all.filter((m) => ids.includes(m.id));
   }
-  const data = await gql<{ Page: { media: RawMedia[] } }>(
-    MEDIA_BY_IDS_QUERY,
-    { id_in: ids },
-    CACHE_TTL_MEDIA_MS,
-  );
-  return data.Page.media.map(mapMedia);
+  // GraphQL Page depth cap is 5000, perPage max 50 → chunk the input
+  const out: MediaLite[] = [];
+  for (let i = 0; i < ids.length; i += 50) {
+    const data = await gql<{ Page: { media: RawMedia[] } }>(
+      MEDIA_BY_IDS_QUERY,
+      { id_in: ids.slice(i, i + 50) },
+      CACHE_TTL_MEDIA_MS,
+    );
+    out.push(...data.Page.media.map(mapMedia));
+  }
+  return out;
 }
 
 export async function fetchRecommendations(

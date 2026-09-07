@@ -6,7 +6,11 @@ function DimBar(props: { d: DimValue; lang: Lang; negative: boolean }) {
   return (
     <div className="dim-row">
       <span className="dim-label">
-        {props.d.dim}: {props.d.value}
+        {tr(
+          props.lang,
+          `dim${props.d.dim[0].toUpperCase()}${props.d.dim.slice(1)}`,
+        )}
+        : {props.d.value}
       </span>
       <span className={`dim-bar ${props.negative ? "neg" : "pos"}`}>
         <span style={{ width: `${pct}%` }} />

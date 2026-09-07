@@ -1,4 +1,6 @@
 :root {
+  color-scheme: dark;
+  accent-color: var(--accent);
   --bg: #10121a;
   --surface: #1a1d2b;
   --surface-2: #232741;
@@ -213,6 +215,9 @@ button:disabled {
   background: var(--surface);
   border-radius: var(--radius);
   overflow: hidden;
+}
+.cover-link:focus-visible {
+  outline-offset: -3px; /* keep the ring inside the overflow-hidden card */
 }
 .cover-link img {
   width: 100%;

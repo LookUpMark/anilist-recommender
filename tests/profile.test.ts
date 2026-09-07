@@ -64,6 +64,17 @@ test("eraBucket floors to 5-year buckets", () => {
   assert.equal(eraBucket(null), null);
 });
 
+test("entrySentiment: clamp bounds are exact", () => {
+  const { mean } = meanScoreOf([entry(1, "COMPLETED", 60), entry(2, "COMPLETED", 80), entry(3, "COMPLETED", 100)]);
+  // +40 over mean 80 → sRaw exactly +1
+  assert.equal(entrySentiment(entry(4, "COMPLETED", 120), mean).s, 1);
+  // far below mean + dropped status → clamps to -1, never below
+  assert.equal(entrySentiment(entry(4, "DROPPED", 0), 60).s, -0.6);
+  assert.equal(entrySentiment(entry(4, "PAUSED", 20), 80).s, -1);
+  // repeat bonus can push over 1 → total clamps
+  assert.equal(entrySentiment(entry(4, "CURRENT", 120, 3), mean).s, 1);
+});
+
 test("buildProfile: loved tag from high scores, disliked genre from drops, planning ignored", () => {
   const entries: ListEntry[] = [
     entry(1, "COMPLETED", 95),

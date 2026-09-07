@@ -3,7 +3,7 @@ import { test } from "node:test";
 import { createServer, type Server } from "node:http";
 import type { AddressInfo } from "node:net";
 import type { MediaLite, ScoredReco, TasteProfile } from "../src/shared/types.ts";
-import { explainRecos } from "../src/server/llm.ts";
+import { explainRecos, parseExplanations } from "../src/server/llm.ts";
 
 // explainRecos reads LLM_BASE_URL per call — each test points it at its fake server
 
@@ -68,37 +68,67 @@ async function withFakeLLM(
   }
 }
 
-test("explainRecos: LLM narrations win, fallback for misses, cache serves the second call", async () => {
-  // unique profile hash per run → fresh disk cache key
+test("explainRecos: LLM narrations cached, fallbacks never cached, request contract held", async () => {
   profile.hash = `h-${Math.random().toString(36).slice(2)}`;
-  await withFakeLLM(
-    (body) => {
-      const ids = [...body.messages.at(-1).content.matchAll(/id=(\d+)/g)].map((m) => Number(m[1]));
-      return JSON.stringify(
-        ids.map((id) => (id === 2 ? { id, why: "" } : { id, why: `llm says ${id}` })),
-      );
-    },
-    async (url, hits) => {
-      process.env.LLM_BASE_URL = url;
-      const recos = [reco(1), reco(2)];
-      const first = await explainRecos(recos, profile, "en", "testuser");
-      assert.equal(first.get(1)?.source, "llm");
-      assert.equal(first.get(1)?.text, "llm says 1");
-      assert.equal(first.get(2)?.source, "fallback", "empty LLM answer falls back");
-      assert.equal(first.get(2)?.text, "deterministic why for 2");
-      assert.equal(hits.count, 1);
+  const prevBase = process.env.LLM_BASE_URL;
+  const prevModel = process.env.LLM_MODEL;
+  try {
+    await withFakeLLM(
+      (body) => {
+        // request-contract asserts: model from config, profile + language present
+        assert.equal(body.model, process.env.LLM_MODEL ?? "qwen3:8b");
+        const user = body.messages.at(-1).content as string;
+        assert.ok(user.includes("Psychological"), "taste profile must reach the prompt");
+        assert.ok(user.includes("English"), "language directive must be present");
+        const ids = [...user.matchAll(/id=(\d+)/g)].map((m) => Number(m[1]));
+        return JSON.stringify(ids.map((id) => (id === 2 ? { id, why: "" } : { id, why: `llm says ${id}` })));
+      },
+      async (url, hits) => {
+        process.env.LLM_BASE_URL = url;
+        const recos = [reco(1), reco(2)];
+        const first = await explainRecos(recos, profile, "en", "testuser");
+        assert.equal(first.get(1)?.source, "llm");
+        assert.equal(first.get(1)?.text, "llm says 1");
+        assert.equal(first.get(2)?.source, "fallback", "empty LLM answer falls back");
+        assert.equal(first.get(2)?.text, "deterministic why for 2");
+        assert.equal(hits.count, 1);
 
-      const second = await explainRecos(recos, profile, "en", "testuser");
-      assert.equal(second.get(1)?.source, "cache");
-      assert.equal(hits.count, 1, "second call must not hit the LLM");
-    },
-  );
+        const second = await explainRecos(recos, profile, "en", "testuser");
+        assert.equal(second.get(1)?.source, "cache", "LLM text is cached");
+        assert.equal(second.get(2)?.source, "fallback", "fallbacks are NOT cached — model retried");
+        assert.equal(hits.count, 2, "second call retries the failed id with the LLM");
+      },
+    );
+  } finally {
+    if (prevBase === undefined) delete process.env.LLM_BASE_URL;
+    else process.env.LLM_BASE_URL = prevBase;
+    if (prevModel === undefined) delete process.env.LLM_MODEL;
+    else process.env.LLM_MODEL = prevModel;
+  }
 });
 
 test("explainRecos: unreachable LLM degrades to deterministic fallbacks without throwing", async () => {
   profile.hash = `h-${Math.random().toString(36).slice(2)}`;
-  process.env.LLM_BASE_URL = "http://127.0.0.1:59999/v1"; // nothing listens here
-  const out = await explainRecos([reco(7)], profile, "it", "testuser");
-  assert.equal(out.get(7)?.source, "fallback");
-  assert.ok(out.get(7)?.text.includes("deterministic why for 7"));
+  const prevBase = process.env.LLM_BASE_URL;
+  try {
+    process.env.LLM_BASE_URL = "http://127.0.0.1:59999/v1"; // nothing listens here
+    const out = await explainRecos([reco(7)], profile, "it", "testuser");
+    assert.equal(out.get(7)?.source, "fallback");
+    assert.ok(out.get(7)?.text.includes("deterministic why for 7"));
+  } finally {
+    if (prevBase === undefined) delete process.env.LLM_BASE_URL;
+    else process.env.LLM_BASE_URL = prevBase;
+  }
+});
+
+test("parseExplanations: prose-wrapped, fenced, truncated and garbage input", () => {
+  assert.deepEqual(parseExplanations('bla [{"id":1,"why":"a"}] tra'), [{ id: 1, why: "a" }]);
+  assert.deepEqual(parseExplanations('```json\n[{"id":2,"why":"b"}]\n```'), [{ id: 2, why: "b" }]);
+  // prose containing a second array: only the first balanced array is taken
+  assert.deepEqual(parseExplanations('[{"id":3,"why":"c"}] and [{"id":9,"why":"x"}]'), [{ id: 3, why: "c" }]);
+  // string ids coerce when integer (small models), garbage ids drop
+  assert.deepEqual(parseExplanations('[{"id":"4","why":"d"}]'), [{ id: 4, why: "d" }]);
+  assert.deepEqual(parseExplanations('[{"id":"abc","why":"e"}]'), []);
+  assert.deepEqual(parseExplanations("no array here at all"), []);
+  assert.deepEqual(parseExplanations("[unclosed"), []);
 });

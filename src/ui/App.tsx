@@ -13,13 +13,14 @@ type SortKey = "final" | "gem" | "affinity";
 const gemRank = (r: RecoResult["recos"][number]): number =>
   r.badges.includes("HIDDEN_GEM")
     ? r.breakdown.affinity - r.media.popularity / 1_000_000
-    : -1;
+    : Number.NEGATIVE_INFINITY; // outside the value domain — no config coupling
 
 export function App() {
   const [lang, setLang] = useState<Lang>(
-    (localStorage.getItem("lang") as Lang | null) ?? "en",
+    localStorage.getItem("lang") === "it" ? "it" : "en", // validate, never cast
   );
   const [phase, setPhase] = useState<Phase>("idle");
+  const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [profile, setProfile] = useState<TasteProfile | null>(null);
   const [result, setResult] = useState<RecoResult | null>(null);
@@ -28,12 +29,12 @@ export function App() {
   const [sort, setSort] = useState<SortKey>("final");
   const [gemsOnly, setGemsOnly] = useState(false);
   const [format, setFormat] = useState("all");
-  const [setup, setSetup] = useState<SetupStatus | null>(null);
+  const [setup, setSetup] = useState<SetupStatus | null | "error">(null);
 
   useEffect(() => {
     fetchSetupStatus()
       .then(setSetup)
-      .catch(() => setSetup(null));
+      .catch(() => setSetup("error"));
   }, []);
 
   useEffect(() => {
@@ -58,6 +59,7 @@ export function App() {
     setError(null);
     setResult(null);
     setPhase("profile");
+    setLoading(true);
     try {
       const p = await fetchProfile(username);
       setProfile(p.profile);
@@ -84,6 +86,8 @@ export function App() {
     } catch (e) {
       setError(errorMessage(e));
       setPhase("idle");
+    } finally {
+      setLoading(false);
     }
   }
 
@@ -103,6 +107,18 @@ export function App() {
     () => [...new Set((result?.recos ?? []).map((r) => r.media.format).filter(Boolean))] as string[],
     [result],
   );
+
+  if (setup === "error") {
+    return (
+      <main className="app wizard">
+        <h1>{tr(lang, "appName")}</h1>
+        <p className="error">{tr(lang, "errGeneric")}</p>
+        <button onClick={() => fetchSetupStatus().then(setSetup).catch(() => setSetup("error"))}>
+          {tr(lang, "go")}
+        </button>
+      </main>
+    );
+  }
 
   if (setup && !setup.setupDone && !setup.customEnv) {
     return (
@@ -134,7 +150,7 @@ export function App() {
         </div>
       </header>
 
-      <UsernameForm lang={lang} busy={phase === "profile" || phase === "recos"} onSubmit={run} />
+      <UsernameForm lang={lang} busy={loading} onSubmit={run} />
       <p className="hint">{tr(lang, "apiHint")}</p>
 
       {error && (
@@ -149,7 +165,22 @@ export function App() {
         <ProfilePanel profile={profile} lang={lang} />
       )}
 
-      {result && result.recos.length === 0 && <p className="empty">{tr(lang, "emptyState")}</p>}
+      {result && recos.length === 0 && (
+        <p className="empty">
+          {tr(lang, "emptyState")}{" "}
+          {(gemsOnly || format !== "all") && (
+            <button
+              className="linklike"
+              onClick={() => {
+                setGemsOnly(false);
+                setFormat("all");
+              }}
+            >
+              {tr(lang, "allFormats")}
+            </button>
+          )}
+        </p>
+      )}
 
       {result && result.recos.length > 0 && (
         <>

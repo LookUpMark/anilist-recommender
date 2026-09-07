@@ -13,7 +13,6 @@ export interface FranchiseInfo {
 }
 
 const SEEN: ReadonlySet<string> = new Set(["COMPLETED", "CURRENT", "REPEATING", "PAUSED"]);
-const MAX_DEPTH = 10;
 
 /**
  * Classify each candidate against the user's list using PREQUEL chains.
@@ -31,21 +30,36 @@ export function analyzeFranchises(
     prequelOf.set(m.id, prequel?.id);
   }
 
-  const info = new Map<number, FranchiseInfo>();
-  for (const m of candidates) {
-    // walk prequels: chain ordered root-most → immediate predecessor of m
+  // memoized predecessor chains (root-most first); no hop cap — the memo makes
+  // long chains linear overall, and the graph is finite (pool edges only)
+  const chainMemo = new Map<number, number[]>();
+  const chainOf = (id: number): number[] => {
+    const memo = chainMemo.get(id);
+    if (memo) return memo;
     const chain: number[] = [];
-    const visited = new Set([m.id]);
-    let cur = m.id;
-    for (let hop = 0; hop < MAX_DEPTH; hop++) {
+    const visited = new Set([id]);
+    let cur = id;
+    for (;;) {
       const p = prequelOf.get(cur);
-      if (p == null) break;
-      if (visited.has(p)) break; // cycle guard
+      if (p == null || visited.has(p)) break; // end of chain / cycle guard
+      const upstream = chainMemo.get(p);
+      if (upstream) {
+        // p + upstream's predecessors, predecessor-first like the loop below
+        chain.push(p, ...[...upstream].reverse());
+        break;
+      }
       visited.add(p);
       chain.push(p);
       cur = p;
     }
-    chain.reverse();
+    chain.reverse(); // built predecessor-first → canonical root-most first
+    chainMemo.set(id, chain);
+    return chain;
+  };
+
+  const info = new Map<number, FranchiseInfo>();
+  for (const m of candidates) {
+    const chain = chainOf(m.id);
 
     const droppedId = chain.find((id) => listMap.get(id)?.status === "DROPPED") ?? null;
     const firstUnseen = chain.find((id) => {
@@ -67,7 +81,8 @@ export function analyzeFranchises(
     }
     info.set(m.id, {
       kind,
-      rootId: chain[0] ?? m.id,
+      // canonical root: min id so cyclic clusters collapse into one group
+      rootId: Math.min(m.id, ...chain),
       entryPointId,
       droppedId,
     });

@@ -28,6 +28,14 @@ ANILIST_FIXTURES=fixtures pnpm dev   # app offline su fixture sintetiche
 - **M5**: username AniList di Marco = **LookUpMark** (2026-09-07). Registrare fixtures reali e provare il flusso e2e: `pnpm record-fixtures LookUpMark` poi `pnpm dev`. Il 2026-09-07 l'API rispondeva 403 "temporarily disabled due to severe stability issues" — riprovare quando torna su.
 - Release v1.0.0 dopo M5 (commit solo a nome Marco, push su richiesta)
 
+## Esito audit avversariale (20260907-193547)
+
+Report: `docs/audits/AUDIT-20260907-193547.md` (81 findings validi: 0 CRITICAL, 5 HIGH, 16 MEDIUM, 56 LOW, 4 INFO; patch proposte in `docs/audits/patches/`, MAI applicate lì).
+
+**Fix applicati in follow-up (79/81 pieni + 2 parziali)**: Host/Origin allowlist su /api (DNS rebinding chiuso), disclosure minimale (lms.path e baseUrl non più esposti), profilo gusti ordinato per affinità (profile.ts + candidates.ts), wizard download collegato al job reale, form non più bloccato dopo la prima ricerca, retry 429 limitato (max 10, delay sanitizzato), runLms escalation SIGKILL + promise sempre settled, runInstall con timeout 10min, catene franchise illimitate con root canonica min-id (memoizzate), avoided include le serie droppate, fallback LLM non più cachati, parse JSON quote-aware, write cache atomiche, contract UI/server allineati su SetupStatus, test estesi con boundary e mutation-tested (26/26 verdi).
+
+Differiti dichiarati: ci.yml actions ancora tag-based (@v4, mitigato con `permissions: contents: read` — SHA pin da fare con lookup online); CACHE_DIR iniettabile via env ma i test llm in-process scrivono ancora in data/cache (gitignored).
+
 ## Checklist e2e manuale M6 (mac di Marco, LM Studio reale)
 
 - [ ] `rm -f data/config.json && pnpm dev` → wizard mostrato all'avvio
