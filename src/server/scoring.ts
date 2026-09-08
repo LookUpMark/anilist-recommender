@@ -95,6 +95,10 @@ export function deterministicWhy(
     return tr(lang, "whyNeutral", {
       avg: String(m.averageScore ?? "?"),
       pop: m.popularity.toLocaleString(lang),
+      gemPart:
+        badges.includes("HIDDEN_GEM")
+          ? tr(lang, "whyGem", { pop: m.popularity.toLocaleString(lang), avg: String(m.averageScore ?? "?") })
+          : "",
     });
   }
   const dims = overlap.map((o) => o.label.split(":").join(" ")).join(", ");

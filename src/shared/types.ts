@@ -111,6 +111,7 @@ export interface SetupStatus {
   hardware: SetupHardware;
   suggested: { model: string; sizeGb: number; mlx: { model: string; sizeGb: number } | null };
   lms: { installed: boolean; path: string | null; serverUp: boolean };
+  omlx: { installed: boolean; serverUp: boolean; models: string[] };
   downloadedModels: string[];
   job: { state: "idle" | "installing-cli" | "downloading" | "done" | "error"; model: string | null; logTail: string; error?: string };
   llm: { state: "up" | "starting" | "off" };

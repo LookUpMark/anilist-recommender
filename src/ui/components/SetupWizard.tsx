@@ -23,6 +23,9 @@ export function SetupWizard(props: {
   const [model, setModel] = useState<string>(props.initial.suggested.model);
   const [customOpen, setCustomOpen] = useState(false);
   const [customUrl, setCustomUrl] = useState("");
+  const [backend, setBackend] = useState<"lmstudio" | "omlx" | null>(
+    props.initial.omlx.installed && !props.initial.lms.serverUp ? "omlx" : null,
+  );
   const pollReq = useRef(0);
 
   // poll while the wizard is open: job progress + backend state (drop stale responses)
@@ -111,6 +114,53 @@ export function SetupWizard(props: {
 
         {step === 1 && (
           <>
+            {status.omlx.installed && (
+              <div className="backend-row">
+                <button
+                  className={backend === "omlx" ? "selected" : ""}
+                  onClick={() => {
+                    setBackend("omlx");
+                    setModel(status.omlx.models[0] ?? model);
+                  }}
+                >
+                  {tr(lang, "backendOmlx")}
+                </button>
+                <button
+                  className={backend === "lmstudio" ? "selected" : ""}
+                  onClick={() => {
+                    setBackend("lmstudio");
+                    setModel(status.suggested.model);
+                  }}
+                >
+                  {tr(lang, "backendLms")}
+                </button>
+              </div>
+            )}
+            {backend === "omlx" && status.omlx.installed ? (
+              <>
+                <p className="profile-meta">{tr(lang, "omlxFound")}</p>
+                <div className="omlx-models">
+                  {status.omlx.models.map((m) => (
+                    <label key={m} className="mlx-opt">
+                      <input
+                        type="radio"
+                        name="omlx-model"
+                        checked={model === m}
+                        onChange={() => setModel(m)}
+                      />
+                      {m}
+                    </label>
+                  ))}
+                </div>
+                <p className="hint">{tr(lang, "omlxStartNote")}</p>
+                <div className="action-row">
+                  <button disabled={busy} onClick={() => finish({ backend: "omlx", model })}>
+                    {tr(lang, "go")}
+                  </button>
+                </div>
+              </>
+            ) : (
+              <>
             <div className="model-card">
               <span>
                 {tr(lang, "recModel")}: <strong>{model}</strong>{" "}
@@ -164,6 +214,8 @@ export function SetupWizard(props: {
                 <p className="hint">{tr(lang, "winFirstRun")}</p>
               )}
             </div>
+              </>
+            )}
           </>
         )}
 

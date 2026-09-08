@@ -3,12 +3,16 @@ import { mkdir, readFile, rename, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import type { Explanation, Lang, ScoredReco, TasteProfile } from "../shared/types.ts";
 import { CACHE_DIR, CACHE_TTL_EXPL_MS, llmBaseUrl, llmModel, LLM_TIMEOUT_MS } from "./config.ts";
+import { llmAuthHeaders } from "./setup.ts";
 
 const EXPL_DIR = join(CACHE_DIR, "expl");
 
 export async function llmHealth(): Promise<boolean> {
   try {
-    const res = await fetch(`${llmBaseUrl()}/models`, { signal: AbortSignal.timeout(2000) });
+    const res = await fetch(`${llmBaseUrl()}/models`, {
+      headers: llmAuthHeaders(),
+      signal: AbortSignal.timeout(2000),
+    });
     return res.ok;
   } catch {
     return false;
@@ -18,7 +22,7 @@ export async function llmHealth(): Promise<boolean> {
 async function llmChat(messages: { role: string; content: string }[]): Promise<string> {
   const res = await fetch(`${llmBaseUrl()}/chat/completions`, {
     method: "POST",
-    headers: { "content-type": "application/json" },
+    headers: { "content-type": "application/json", ...llmAuthHeaders() },
     body: JSON.stringify({ model: llmModel(), messages, temperature: 0.3, max_tokens: 2000 }),
     signal: AbortSignal.timeout(LLM_TIMEOUT_MS),
   });

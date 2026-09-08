@@ -1,5 +1,5 @@
 import { spawn, spawnSync } from "node:child_process";
-import { appendFileSync, existsSync, mkdirSync, unlinkSync } from "node:fs";
+import { appendFileSync, existsSync, mkdirSync, openSync, readdirSync, readFileSync, unlinkSync } from "node:fs";
 import { homedir, platform, arch, totalmem, cpus } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -61,6 +61,55 @@ export function suggestModel(hw: Hardware): {
   };
 }
 
+// --- oMLX (Apple Silicon multi-model server) -------------------------------------
+
+const omlxDefaultPath = (): string => join(homedir(), ".omlx", "bin", "omlx");
+const OMLX_BASE = process.env.OMLX_BASE_URL ?? "http://127.0.0.1:8080/v1";
+
+export function resolveOmlx(): string | null {
+  if (process.env.OMLX_BIN) return process.env.OMLX_BIN;
+  const def = omlxDefaultPath();
+  return existsSync(def) ? def : null;
+}
+
+/** The oMLX API key never leaves the server: read in-memory, used as auth header only. */
+export function readOmlxKey(): string | null {
+  if (process.env.OMLX_API_KEY) return process.env.OMLX_API_KEY;
+  try {
+    const s = JSON.parse(readFileSync(join(homedir(), ".omlx", "settings.json"), "utf8"));
+    const key = s?.auth?.api_key;
+    return typeof key === "string" && key.length > 0 ? key : null;
+  } catch {
+    return null;
+  }
+}
+
+function localOmlxModels(): string[] {
+  try {
+    return readdirSync(join(homedir(), ".omlx", "models"), { withFileTypes: true })
+      .filter((d) => d.isDirectory())
+      .map((d) => d.name);
+  } catch {
+    return [];
+  }
+}
+
+async function omlxModels(serverUp: boolean): Promise<string[]> {
+  if (!serverUp) return localOmlxModels();
+  try {
+    const key = readOmlxKey();
+    const res = await fetch(`${OMLX_BASE}/models`, {
+      headers: key ? { authorization: `Bearer ${key}` } : {},
+      signal: AbortSignal.timeout(3000),
+    });
+    if (!res.ok) return localOmlxModels();
+    const j = (await res.json()) as { data?: { id?: string }[] };
+    return (j.data ?? []).map((m) => m.id ?? "").filter(Boolean);
+  } catch {
+    return localOmlxModels();
+  }
+}
+
 // --- lms resolution -------------------------------------------------------------
 
 const lmsDefaultPath = (): string =>
@@ -90,14 +139,27 @@ const log = (line: string): void => {
   }
 };
 
-const httpOk = async (url: string, timeoutMs: number): Promise<boolean> => {
+const httpOk = async (url: string, timeoutMs: number, headers: Record<string, string> = {}): Promise<boolean> => {
   try {
-    const res = await fetch(url, { signal: AbortSignal.timeout(timeoutMs) });
+    const res = await fetch(url, { headers, signal: AbortSignal.timeout(timeoutMs) });
     return res.ok;
   } catch {
     return false;
   }
 };
+
+const sleep = (ms: number): Promise<void> => new Promise((r) => setTimeout(r, ms));
+
+/** Auth headers for the configured backend. Keys never leave the server. */
+export function llmAuthHeaders(): Record<string, string> {
+  if (process.env.LLM_API_KEY) return { authorization: `Bearer ${process.env.LLM_API_KEY}` };
+  const cfg = readConfigFile();
+  if (cfg.backend === "omlx") {
+    const key = readOmlxKey();
+    if (key) return { authorization: `Bearer ${key}` };
+  }
+  return {};
+}
 
 interface RunResult {
   code: number | null;
@@ -252,10 +314,11 @@ export function llmBackendState(): BackendState {
   return backendState;
 }
 
-/** Fire-and-forget: bring the LM Studio server up with the configured model. */
+/** Fire-and-forget: bring the configured LLM backend up (LM Studio or oMLX). */
 export function ensureLlmServer(): void {
   const cfg = readConfigFile();
-  if (!cfg.setupDone || cfg.backend !== "lmstudio" || !cfg.model) return;
+  if (!cfg.setupDone || !cfg.model) return;
+  if (cfg.backend !== "lmstudio" && cfg.backend !== "omlx") return;
   if (hasCustomEnv()) return; // env LLM_BASE_URL wins everywhere — hands off
   if (ensureLock) return; // ponytail: single global lock, mono-user server
   backendState = "starting";
@@ -272,8 +335,31 @@ export function ensureLlmServer(): void {
 async function run(): Promise<void> {
   const cfg = readConfigFile();
   const base = cfg.baseUrl ?? LMSTUDIO_BASE;
-  if (await httpOk(`${base}/models`, 2000)) {
+  if (await httpOk(`${base}/models`, 2000, llmAuthHeaders())) {
     backendState = "up";
+    return;
+  }
+  if (cfg.backend === "omlx") {
+    const omlx = resolveOmlx();
+    if (!omlx) {
+      log("omlx non trovato — backend LLM non avviato");
+      backendState = "off";
+      return;
+    }
+    const port = new URL(base).port || "8080";
+    log(`avvio omlx serve sulla porta ${port}`);
+    // long-lived inference server: survives app restarts (logs to data/llm.log)
+    const out = openSync(LLM_LOG, "a");
+    const child = spawn(omlx, ["serve", "--host", "127.0.0.1", "--port", port], {
+      stdio: ["ignore", out, out],
+      detached: true,
+    });
+    child.unref();
+    for (let i = 0; i < 60 && !(await httpOk(`${base}/models`, 2000, llmAuthHeaders())); i++) {
+      await sleep(2000);
+    }
+    backendState = (await httpOk(`${base}/models`, 2000, llmAuthHeaders())) ? "up" : "off";
+    log(`backend omlx: ${backendState}`);
     return;
   }
   const lms = resolveLms();
@@ -363,9 +449,12 @@ setupRoutes.get("/status", async (c) => {
   const cfg = readConfigFile();
   const hw = detectHardware();
   const lms = resolveLms();
-  const [models, serverUp] = await Promise.all([
+  const omlx = resolveOmlx();
+  const omlxUp = omlx != null && (await httpOk(`${OMLX_BASE}/models`, 1000, llmAuthHeaders()));
+  const [models, omlxModelsList, serverUp] = await Promise.all([
     jobActive() ? [] : downloadedModels(lms),
-    httpOk(`${cfg.baseUrl ?? LMSTUDIO_BASE}/models`, 1000),
+    omlx != null ? omlxModels(omlxUp) : Promise.resolve([]),
+    httpOk(`${cfg.baseUrl ?? LMSTUDIO_BASE}/models`, 1000, llmAuthHeaders()),
   ]);
   // disclosure-minimal: no absolute binary path, no raw env details beyond hw summary
   const status: SetupStatus = {
@@ -374,6 +463,7 @@ setupRoutes.get("/status", async (c) => {
     hardware: hw,
     suggested: suggestModel(hw),
     lms: { installed: lms != null, path: null, serverUp },
+    omlx: { installed: omlx != null, serverUp: omlxUp, models: omlxModelsList },
     downloadedModels: models,
     job,
     llm: { state: reportedLlmState(serverUp) },
@@ -404,7 +494,7 @@ setupRoutes.post("/download", async (c) => {
 
 setupRoutes.post("/finish", async (c) => {
   const body = (await c.req.json().catch(() => null)) as
-    | { model?: string; baseUrl?: string; backend?: "skipped" }
+    | { model?: string; baseUrl?: string; backend?: "skipped" | "omlx" }
     | null;
   if (!body) return c.json({ error: "invalid_request" }, 400);
   if (body.backend === "skipped") {
@@ -419,6 +509,13 @@ setupRoutes.post("/finish", async (c) => {
     const patch: AppConfig = { setupDone: true, backend: "custom", baseUrl: body.baseUrl };
     if (body.model) patch.model = body.model;
     updateConfig(patch);
+    return c.json({ ok: true });
+  }
+  if (body.backend === "omlx") {
+    if (!body.model) return c.json({ error: "invalid_model" }, 400);
+    if (!resolveOmlx()) return c.json({ error: "omlx_missing" }, 400);
+    updateConfig({ setupDone: true, backend: "omlx", model: body.model, baseUrl: OMLX_BASE });
+    ensureLlmServer();
     return c.json({ ok: true });
   }
   if (!body.model) return c.json({ error: "invalid_model" }, 400);

@@ -85,6 +85,10 @@ const en: Dict = {
   osMac: "macOS",
   osWin: "Windows",
   osLinux: "Linux",
+  backendOmlx: "oMLX (Apple Silicon)",
+  backendLms: "LM Studio",
+  omlxFound: "oMLX detected — models on disk:",
+  omlxStartNote: "The oMLX server will be started automatically.",
 };
 
 const it: Dict = {
@@ -169,6 +173,10 @@ const it: Dict = {
   osMac: "macOS",
   osWin: "Windows",
   osLinux: "Linux",
+  backendOmlx: "oMLX (Apple Silicon)",
+  backendLms: "LM Studio",
+  omlxFound: "oMLX rilevato — modelli su disco:",
+  omlxStartNote: "Il server oMLX verrà avviato automaticamente.",
 };
 
 const DICTS: Record<Lang, Dict> = { en, it };

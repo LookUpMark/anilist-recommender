@@ -327,6 +327,21 @@ button:disabled {
 .wizard {
   max-width: 640px;
 }
+.backend-row {
+  display: flex;
+  gap: 8px;
+  margin: 12px 0;
+}
+.backend-row button.selected {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+.omlx-models {
+  display: grid;
+  gap: 6px;
+  margin: 10px 0;
+  font-size: 0.9rem;
+}
 .model-card {
   background: var(--surface-2);
   border-radius: var(--radius);
