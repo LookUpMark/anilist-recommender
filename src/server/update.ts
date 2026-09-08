@@ -23,8 +23,8 @@ let memoTag: string | null = null;
 let memoUrl: string | null = null;
 const MEMO_MS = 5 * 60 * 1000; // GitHub anonymous rate limit is 60/h
 
-async function latestRelease(): Promise<{ tag: string | null; url: string | null }> {
-  if (Date.now() - memoAt < MEMO_MS) return { tag: memoTag, url: memoUrl };
+async function latestRelease(fresh = false): Promise<{ tag: string | null; url: string | null }> {
+  if (!fresh && Date.now() - memoAt < MEMO_MS) return { tag: memoTag, url: memoUrl };
   try {
     const res = await fetch(RELEASES_URL, {
       headers: { accept: "application/vnd.github+json" },
@@ -49,11 +49,12 @@ export interface AppUpdateStatus {
   available: boolean;
 }
 
-/** Update check: APP_VERSION is injected by the Electron main (absent in dev/docker). */
-export async function appUpdateStatus(): Promise<AppUpdateStatus> {
+/** Update check: APP_VERSION is injected by the Electron main (absent in dev/docker).
+ *  `fresh` bypasses the memo — the manual "check now" button must hit GitHub. */
+export async function appUpdateStatus(fresh = false): Promise<AppUpdateStatus> {
   const current = APP_VERSION ?? null;
   if (!current) return { current: null, latest: null, url: null, available: false };
-  const { tag, url } = await latestRelease();
+  const { tag, url } = await latestRelease(fresh);
   return {
     current,
     latest: tag,

@@ -101,6 +101,22 @@ export function App() {
     fetchAppUpdate().then(setUpdate).catch(() => undefined);
   }, []);
 
+  // manual "check now" (Settings + rail chip): fresh fetch + spinner feedback
+  const [updChecking, setUpdChecking] = useState(false);
+  const [updError, setUpdError] = useState(false);
+  const checkUpdates = () => {
+    if (updChecking) return;
+    setUpdChecking(true);
+    setUpdError(false);
+    fetchAppUpdate(true)
+      .then((u) => {
+        setUpdate(u);
+        if (!u.current) setUpdError(true); // dev/docker: nothing to compare against
+      })
+      .catch(() => setUpdError(true))
+      .finally(() => setUpdChecking(false));
+  };
+
   // the top scrim under the sticky topbar lights up once the page scrolls
   useEffect(() => {
     const el = document.getElementById("top-fade");
@@ -237,7 +253,8 @@ export function App() {
             postLocalMode(!local.auto).then((r) => setLocal(r.local)).catch(() => undefined);
           }}
           update={update}
-          onCheckUpdates={() => fetchAppUpdate().then(setUpdate).catch(() => undefined)}
+          updateChecking={updChecking}
+          onCheckUpdates={checkUpdates}
           onNav={showView}
           onLang={() => setLang(lang === "en" ? "it" : "en")}
         />
@@ -498,16 +515,20 @@ export function App() {
             <div className="set-row">
               <span>{tr(lang, "setTitleUpd")}</span>
               <div className="set-stack">
-                {update?.available ? (
+                {update?.available && !updChecking ? (
                   <button type="button" className="linklike" onClick={() => update.url && window.open(update.url, "_blank", "noopener")}>
                     {tr(lang, "updateAvailable", { v: update.latest ?? "" })}
                   </button>
                 ) : (
-                  <button type="button" className="linklike" onClick={() => fetchAppUpdate().then(setUpdate).catch(() => undefined)}>
-                    {tr(lang, "checkUpdates")}
+                  <button type="button" className="linklike set-check" disabled={updChecking} onClick={checkUpdates}>
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden="true" className={updChecking ? "spin" : undefined}>
+                      <path d="M20 12a8 8 0 1 1-2.3-5.6M20 4v4h-4" />
+                    </svg>
+                    {updChecking ? tr(lang, "checking") : tr(lang, "checkUpdates")}
                   </button>
                 )}
-                {update?.latest && !update.available && <small>{tr(lang, "upToDate")}</small>}
+                {updError && <small className="err">{tr(lang, "errGeneric")}</small>}
+                {!updError && update?.latest && !update.available && <small>{tr(lang, "upToDate")}</small>}
                 {update?.current && <small>{tr(lang, "currentVersion", { v: update.current })}</small>}
               </div>
             </div>

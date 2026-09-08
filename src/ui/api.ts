@@ -36,7 +36,8 @@ export interface AppUpdate {
   available: boolean;
 }
 
-export const fetchAppUpdate = (): Promise<AppUpdate> => fetch("/api/app-update").then(json);
+export const fetchAppUpdate = (fresh = false): Promise<AppUpdate> =>
+  fetch(`/api/app-update${fresh ? "?fresh=1" : ""}`).then(json);
 
 export const fetchProfile = (username: string): Promise<{ profile: TasteProfile }> =>
   fetch(`/api/profile/${encodeURIComponent(username)}`).then(json);

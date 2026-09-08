@@ -41,6 +41,7 @@ export function Rail(props: {
   local: LocalMode | null;
   onToggleLocal: () => void;
   update: AppUpdate | null;
+  updateChecking?: boolean;
   onCheckUpdates: () => void;
   onNav: (v: View) => void;
   onLang: () => void;
@@ -116,10 +117,17 @@ export function Rail(props: {
                 type="button"
                 className="llm-chip"
                 data-od-id="update-check"
-                data-tip={tr(lang, "checkUpdates")}
+                data-tip={props.updateChecking ? tr(lang, "checking") : tr(lang, "checkUpdates")}
                 onClick={props.onCheckUpdates}
               >
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" aria-hidden="true">
+                <svg
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="1.6"
+                  aria-hidden="true"
+                  className={props.updateChecking ? "spin" : undefined}
+                >
                   <path d="M20 12a8 8 0 1 1-2.3-5.6M20 4v4h-4" />
                 </svg>
               </button>

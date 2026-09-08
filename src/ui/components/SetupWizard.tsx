@@ -101,6 +101,7 @@ export function SetupWizard(props: {
 
   return (
     <main className="wizard-page">
+      <div className="glow" aria-hidden="true" />
       <button
         type="button"
         className="wizard-lang"

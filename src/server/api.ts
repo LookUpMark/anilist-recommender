@@ -40,7 +40,7 @@ api.get("/health", async (c) => {
   });
 });
 
-api.get("/app-update", async (c) => c.json(await appUpdateStatus()));
+api.get("/app-update", async (c) => c.json(await appUpdateStatus(c.req.query("fresh") === "1")));
 
 // UI toggle: auto-fallback on AniList failure. Switching it off also retries live.
 // {local:false} forces a live retry without touching the auto preference (banner button).
