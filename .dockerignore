@@ -1,0 +1,15 @@
+node_modules/
+dist/
+data/
+fixtures/
+docs/
+.github/
+.git/
+*.log
+.env
+README.md
+LICENSE
+THIRD-PARTY-NOTICES.md
+compose.yaml
+Dockerfile
+.dockerignore

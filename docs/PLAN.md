@@ -36,6 +36,11 @@ Report: `docs/audits/AUDIT-20260907-193547.md` (81 findings validi: 0 CRITICAL, 
 
 Differiti dichiarati: ci.yml actions ancora tag-based (@v4, mitigato con `permissions: contents: read` — SHA pin da fare con lookup online); CACHE_DIR iniettabile via env ma i test llm in-process scrivono ancora in data/cache (gitignored).
 
+## Docker (2026-09-08)
+
+-  = full mode (app + Ollama + Bonsai auto-pull, wizard bypassato via env). App-only per macOS + LM Studio host: header di compose.yaml.
+- Docker assente sul mac di Marco: il build + smoke container girano in CI (job docker). Runtime ollama pull di Bonsai Q1_0 via HF da validare su host docker reale; fallback documentato .
+
 ## Checklist e2e manuale M6 (mac di Marco, LM Studio reale)
 
 - [ ] `rm -f data/config.json && pnpm dev` → wizard mostrato all'avvio

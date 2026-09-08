@@ -1,0 +1,55 @@
+# Full mode: `docker compose up -d` → app + Ollama + model, everything on localhost:3000.
+#
+#   macOS users: Docker runs Linux in a VM without GPU access. If you already have
+#   LM Studio on the host, prefer app-only mode instead:
+#     1. comment out the `ollama` service and the LLM_BASE_URL/LLM_MODEL env lines
+#     2. docker compose up -d app
+#     3. in the setup wizard, use custom endpoint http://host.docker.internal:1234/v1
+#
+# Model choice (RAM): < 16 GB → export ANILIST_MODEL=hf.co/prism-ml/Bonsai-8B-gguf
+# Fallback if Ollama refuses the Q1_0 format: ANILIST_MODEL=qwen3:8b
+
+services:
+  app:
+    build: .
+    ports:
+      - "${APP_PORT:-3000}:3000"
+    environment:
+      # custom env ⇒ the setup wizard stays out of the way; LLM is wired automatically
+      - LLM_BASE_URL=http://ollama:11434/v1
+      - LLM_MODEL=${ANILIST_MODEL:-hf.co/prism-ml/Bonsai-27B-gguf}
+    volumes:
+      - app-data:/app/data # disk cache + config survive restarts
+    extra_hosts:
+      - "host.docker.internal:host-gateway" # reach host LM Studio on Linux too
+    depends_on:
+      - ollama
+    restart: unless-stopped
+
+  ollama:
+    image: ollama/ollama:latest
+    volumes:
+      - ollama-models:/root/.ollama
+    environment:
+      - OLLAMA_MODEL=${ANILIST_MODEL:-hf.co/prism-ml/Bonsai-27B-gguf}
+    # Linux + NVIDIA: uncomment for GPU acceleration (macOS VMs have no GPU)
+    # deploy:
+    #   resources:
+    #     reservations:
+    #       devices:
+    #         - driver: nvidia
+    #           count: all
+    #           capabilities: [gpu]
+    entrypoint: ["/bin/bash", "-c"]
+    # serve → wait for the API → pull the model (no-op when already on disk) → wait
+    command:
+      - |
+        ollama serve &
+        until ollama list >/dev/null 2>&1; do sleep 1; done
+        ollama pull "$$OLLAMA_MODEL"
+        wait
+    restart: unless-stopped
+
+volumes:
+  app-data:
+  ollama-models:
