@@ -155,13 +155,13 @@ export function SetupWizard(props: {
                 {!status.omlx.models.some((m) => m.includes("Bonsai-27B")) && (
                   <div className="model-card">
                     <span>
-                      {tr(lang, "recModel")}: <strong>prism-ml/Bonsai-27B-mlx-1bit</strong> (5.13 GB)
+                      {tr(lang, "recModel")}: <strong>prism-ml/Ternary-Bonsai-27B-mlx-2bit</strong> (7.9 GB)
                     </span>
                     <button
                       disabled={jobBusy || busy}
                       onClick={async () => {
                         setBusy(true);
-                        await postSetup("omlx-download", { model: "prism-ml/Bonsai-27B-mlx-1bit" }).catch(() => undefined);
+                        await postSetup("omlx-download", { model: "prism-ml/Ternary-Bonsai-27B-mlx-2bit" }).catch(() => undefined);
                         setBusy(false);
                       }}
                     >

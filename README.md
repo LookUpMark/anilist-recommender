@@ -47,7 +47,7 @@ docker compose up -d
 # open http://localhost:3000 — app + Ollama + Bonsai model, no wizard, no Node needed
 ```
 
-Full mode wires an Ollama container automatically (`LLM_BASE_URL` env) and pulls the model on first start (~4 GB for Bonsai-27B, no-op afterwards). Pick a smaller model on <16 GB hosts: `ANILIST_MODEL=hf.co/prism-ml/Bonsai-8B-gguf docker compose up -d`. GPU (Linux+NVIDIA): uncomment the `deploy.resources` block in `compose.yaml`.
+Full mode wires an Ollama container automatically (`LLM_BASE_URL` env) and pulls the model on first start (~6.7 GB for Ternary-Bonsai-27B, no-op afterwards). Pick a smaller model on <16 GB hosts: `ANILIST_MODEL=hf.co/prism-ml/Ternary-Bonsai-8B-gguf docker compose up -d`. GPU (Linux+NVIDIA): uncomment the `deploy.resources` block in `compose.yaml`.
 
 **macOS**: Docker runs Linux in a VM without GPU — if you already run LM Studio on the host, prefer app-only mode (see the header of `compose.yaml`): the wizard then points at `http://host.docker.internal:1234/v1`.
 
@@ -61,11 +61,11 @@ pnpm dev
 # open http://127.0.0.1:3000
 ```
 
-On first launch a **setup wizard** appears: it detects your hardware (chip, RAM) and suggests a model — [Bonsai-27B](https://huggingface.co/prism-ml/Bonsai-27B-gguf) (3.9 GB) on ≥16 GB machines, Bonsai-8B (1.16 GB) below. One click installs the LM Studio CLI if missing (official installer scripts, run as fixed commands), one click downloads the model, and from then on **every app start brings the LM Studio server up with your model automatically** (daemon → server → load, logged to `data/llm.log`).
+On first launch a **setup wizard** appears: it detects your hardware (chip, RAM) and suggests a model — [Ternary-Bonsai-27B](https://huggingface.co/prism-ml/Ternary-Bonsai-27B-gguf) (6.7 GB) on ≥16 GB machines, Ternary-Bonsai-8B (2 GB) below. One click installs the LM Studio CLI if missing (official installer scripts, run as fixed commands), one click downloads the model, and from then on **every app start brings the LM Studio server up with your model automatically** (daemon → server → load, logged to `data/llm.log`).
 
 - Skip the wizard anytime: the app works fully without an LLM (deterministic explanations).
 - Prefer your own endpoint (Ollama, LM Studio GUI, llama.cpp server…)? Set `LLM_BASE_URL` in `.env` (see `.env.example`) — the wizard stays out of the way.
-- Apple MLX variant of Bonsai is selectable in the wizard, with a caveat: it requires the PrismML fork of MLX (not merged upstream yet) — the command is shown, not automated.
+- Ternary (2-bit) Apple MLX variants of Bonsai are selectable in the wizard, with a caveat: it requires the PrismML fork of MLX (not merged upstream yet) — the command is shown, not automated.
 - To redo the wizard: `rm data/config.json`.
 
 Language: English by default, Italiano via the toggle (covers UI strings and explanation language).

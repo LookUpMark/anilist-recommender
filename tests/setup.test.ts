@@ -20,8 +20,8 @@ test("suggestModel: RAM thresholds pick 27B vs 8B", () => {
   assert.ok(suggestModel(hw({ ramGb: 32 })).model.includes("27B"));
   assert.ok(suggestModel(hw({ ramGb: 15 })).model.includes("8B"));
   assert.ok(suggestModel(hw({ ramGb: 8 })).model.includes("8B"));
-  assert.equal(suggestModel(hw({ ramGb: 36 })).sizeGb, 3.9);
-  assert.equal(suggestModel(hw({ ramGb: 8 })).sizeGb, 1.16);
+  assert.equal(suggestModel(hw({ ramGb: 36 })).sizeGb, 6.7);
+  assert.equal(suggestModel(hw({ ramGb: 8 })).sizeGb, 2.03);
 });
 
 test("suggestModel: MLX variant only on Apple Silicon", () => {

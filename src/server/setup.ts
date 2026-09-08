@@ -17,13 +17,13 @@ import type { SetupHardware, SetupStatus } from "../shared/types.ts";
 
 const LLM_LOG = join(DATA_DIR, "llm.log");
 
-// --- model catalogue (verified 2026-09-07, Apache 2.0, prism-ml on HF) ----------
+// --- model catalogue (ternary variants, verified 2026-09-08, Apache 2.0, prism-ml on HF) ----------
 
 export const MODELS = {
-  b27: { model: "prism-ml/Bonsai-27B-gguf", sizeGb: 3.9 },
-  b8: { model: "prism-ml/Bonsai-8B-gguf", sizeGb: 1.16 },
+  b27: { model: "prism-ml/Ternary-Bonsai-27B-gguf", sizeGb: 6.7 },
+  b8: { model: "prism-ml/Ternary-Bonsai-8B-gguf", sizeGb: 2.03 },
 } as const;
-const RAM_TRESHOLD_GB = 16; // 27B peaks at 5.2 GB @4K ctx — 16 GB machines are comfy
+const RAM_TRESHOLD_GB = 16; // ternary 27B ≈ 6.7 GB weights (8B-class footprint) @4K ctx — 16 GB machines are comfy
 // overridable so tests (and port-conflicted setups) can point elsewhere
 export const LMSTUDIO_BASE = process.env.LMSTUDIO_BASE_URL ?? "http://127.0.0.1:1234/v1";
 
@@ -52,13 +52,13 @@ export function suggestModel(hw: Hardware): {
     return {
       model: MODELS.b27.model,
       sizeGb: MODELS.b27.sizeGb,
-      mlx: hw.appleSilicon ? { model: "prism-ml/Bonsai-27B-mlx-1bit", sizeGb: 5.13 } : null,
+      mlx: hw.appleSilicon ? { model: "prism-ml/Ternary-Bonsai-27B-mlx-2bit", sizeGb: 7.9 } : null,
     };
   }
   return {
     model: MODELS.b8.model,
     sizeGb: MODELS.b8.sizeGb,
-    mlx: hw.appleSilicon ? { model: "prism-ml/Bonsai-8B-mlx-1bit", sizeGb: 1.3 } : null,
+    mlx: hw.appleSilicon ? { model: "prism-ml/Ternary-Bonsai-8B-mlx-2bit", sizeGb: 2.16 } : null,
   };
 }
 
@@ -312,8 +312,8 @@ export function getJob(): SetupJob {
 // --- Bonsai MLX download into oMLX (streamed from Hugging Face) -------------------
 
 const OMLX_DOWNLOADABLE = {
-  "prism-ml/Bonsai-27B-mlx-1bit": 5.13,
-  "prism-ml/Bonsai-8B-mlx-1bit": 1.3,
+  "prism-ml/Ternary-Bonsai-27B-mlx-2bit": 7.9,
+  "prism-ml/Ternary-Bonsai-8B-mlx-2bit": 2.16,
 } as const;
 const GB = 2 ** 30;
 
