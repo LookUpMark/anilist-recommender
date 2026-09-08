@@ -46,7 +46,7 @@ export const fetchSetupStatus = (): Promise<SetupStatus> =>
 
 /** Errors arrive as thrown Error (server code in message) — {ok:true} on success. */
 export const postSetup = (
-  action: "install-cli" | "download" | "finish" | "reset",
+  action: "install-cli" | "download" | "finish" | "reset" | "omlx-download" | "cancel",
   body?: object,
 ): Promise<{ ok: boolean }> =>
   fetch(`/api/setup/${action}`, {

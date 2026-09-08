@@ -4,6 +4,7 @@ import { createServer, type Server } from "node:http";
 import type { AddressInfo } from "node:net";
 import type { MediaLite, ScoredReco, TasteProfile } from "../src/shared/types.ts";
 import { explainRecos, parseExplanations } from "../src/server/llm.ts";
+import { llmModel } from "../src/server/config.ts";
 
 // explainRecos reads LLM_BASE_URL per call — each test points it at its fake server
 
@@ -64,6 +65,7 @@ async function withFakeLLM(
   try {
     await fn(url, hits);
   } finally {
+    server.closeAllConnections(); // drop keep-alive sockets so the test process can exit
     server.close();
   }
 }
@@ -75,8 +77,8 @@ test("explainRecos: LLM narrations cached, fallbacks never cached, request contr
   try {
     await withFakeLLM(
       (body) => {
-        // request-contract asserts: model from config, profile + language present
-        assert.equal(body.model, process.env.LLM_MODEL ?? "qwen3:8b");
+        // request-contract asserts: model = whatever llmModel() resolves, profile + language present
+        assert.equal(body.model, llmModel());
         const user = body.messages.at(-1).content as string;
         assert.ok(user.includes("Psychological"), "taste profile must reach the prompt");
         assert.ok(user.includes("English"), "language directive must be present");
@@ -124,8 +126,11 @@ test("explainRecos: unreachable LLM degrades to deterministic fallbacks without 
 test("parseExplanations: prose-wrapped, fenced, truncated and garbage input", () => {
   assert.deepEqual(parseExplanations('bla [{"id":1,"why":"a"}] tra'), [{ id: 1, why: "a" }]);
   assert.deepEqual(parseExplanations('```json\n[{"id":2,"why":"b"}]\n```'), [{ id: 2, why: "b" }]);
-  // prose containing a second array: only the first balanced array is taken
-  assert.deepEqual(parseExplanations('[{"id":3,"why":"c"}] and [{"id":9,"why":"x"}]'), [{ id: 3, why: "c" }]);
+  // prose containing multiple arrays: the LAST valid one wins (thinking models
+  // write bracketed fragments first, the real answer last)
+  assert.deepEqual(parseExplanations('[{"id":3,"why":"c"}] and [{"id":9,"why":"x"}]'), [{ id: 9, why: "x" }]);
+  // a bracketed fragment inside reasoning is skipped when it doesn't parse as items
+  assert.deepEqual(parseExplanations('think [0, 1] more [{"id":5,"why":"e"}]'), [{ id: 5, why: "e" }]);
   // string ids coerce when integer (small models), garbage ids drop
   assert.deepEqual(parseExplanations('[{"id":"4","why":"d"}]'), [{ id: 4, why: "d" }]);
   assert.deepEqual(parseExplanations('[{"id":"abc","why":"e"}]'), []);

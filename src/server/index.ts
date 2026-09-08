@@ -4,7 +4,7 @@ import { serveStatic } from "@hono/node-server/serve-static";
 import { Hono } from "hono";
 import { PORT } from "./config.ts";
 import { api } from "./api.ts";
-import { ensureLlmServer } from "./setup.ts";
+import { cleanupOnExit, ensureLlmServer } from "./setup.ts";
 
 // 127.0.0.1 by default (loopback-only by design); containers set HOST=0.0.0.0 —
 // the /api Host allowlist middleware still guards what comes through the mapping
@@ -28,4 +28,5 @@ if (process.env.NODE_ENV !== "production") {
 }
 
 ensureLlmServer(); // fire-and-forget: no-op unless the setup wizard completed
+cleanupOnExit(); // LLM backend lives and dies with the app
 console.log(`anilist-recommender on http://127.0.0.1:${PORT}`);

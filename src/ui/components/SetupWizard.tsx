@@ -152,9 +152,40 @@ export function SetupWizard(props: {
                     </label>
                   ))}
                 </div>
+                {!status.omlx.models.some((m) => m.includes("Bonsai-27B")) && (
+                  <div className="model-card">
+                    <span>
+                      {tr(lang, "recModel")}: <strong>prism-ml/Bonsai-27B-mlx-1bit</strong> (5.13 GB)
+                    </span>
+                    <button
+                      disabled={jobBusy || busy}
+                      onClick={async () => {
+                        setBusy(true);
+                        await postSetup("omlx-download", { model: "prism-ml/Bonsai-27B-mlx-1bit" }).catch(() => undefined);
+                        setBusy(false);
+                      }}
+                    >
+                      {status.job.model?.includes("Bonsai-27B") && status.job.state === "downloading"
+                        ? `${Math.round(((status.job.bytesDone ?? 0) / (status.job.totalBytes || 1)) * 100)}%`
+                        : tr(lang, "download")}
+                    </button>
+                  </div>
+                )}
+                {status.job.state === "downloading" && status.job.totalBytes ? (
+                  <>
+                    <div className="progress" aria-hidden="true">
+                      <span style={{ width: `${Math.round(((status.job.bytesDone ?? 0) / status.job.totalBytes) * 100)}%` }} />
+                    </div>
+                    <div className="action-row">
+                      <button className="linklike" onClick={() => postSetup("cancel").catch(() => undefined)}>
+                        ✕
+                      </button>
+                    </div>
+                  </>
+                ) : null}
                 <p className="hint">{tr(lang, "omlxStartNote")}</p>
                 <div className="action-row">
-                  <button disabled={busy} onClick={() => finish({ backend: "omlx", model })}>
+                  <button disabled={busy || jobBusy} onClick={() => finish({ backend: "omlx", model })}>
                     {tr(lang, "go")}
                   </button>
                 </div>

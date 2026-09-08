@@ -1,5 +1,7 @@
-import { spawn, spawnSync } from "node:child_process";
-import { appendFileSync, existsSync, mkdirSync, openSync, readdirSync, readFileSync, unlinkSync } from "node:fs";
+import { spawn, spawnSync, type ChildProcess } from "node:child_process";
+import { appendFileSync, createWriteStream, existsSync, mkdirSync, openSync, readdirSync, readFileSync, unlinkSync } from "node:fs";
+import { Readable, Transform } from "node:stream";
+import { pipeline } from "node:stream/promises";
 import { homedir, platform, arch, totalmem, cpus } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -86,8 +88,10 @@ export function readOmlxKey(): string | null {
 
 function localOmlxModels(): string[] {
   try {
-    return readdirSync(join(homedir(), ".omlx", "models"), { withFileTypes: true })
-      .filter((d) => d.isDirectory())
+    const modelsDir = join(homedir(), ".omlx", "models");
+    // a real model dir has a config.json — skip stray files and containers
+    return readdirSync(modelsDir, { withFileTypes: true })
+      .filter((d) => d.isDirectory() && existsSync(join(modelsDir, d.name, "config.json")))
       .map((d) => d.name);
   } catch {
     return [];
@@ -225,6 +229,8 @@ export interface SetupJob {
   model: string | null;
   logTail: string;
   error?: string;
+  bytesDone?: number;
+  totalBytes?: number;
 }
 
 let job: SetupJob = { state: "idle", model: null, logTail: "" };
@@ -304,11 +310,118 @@ export function getJob(): SetupJob {
   return job;
 }
 
+// --- Bonsai MLX download into oMLX (streamed from Hugging Face) -------------------
+
+const OMLX_DOWNLOADABLE = {
+  "prism-ml/Bonsai-27B-mlx-1bit": 5.13,
+  "prism-ml/Bonsai-8B-mlx-1bit": 1.3,
+} as const;
+const GB = 2 ** 30;
+
+let dlAbort: AbortController | null = null;
+
+export function startOmlxDownload(repo: string): void {
+  if (jobActive()) throw new Error("busy");
+  if (!(repo in OMLX_DOWNLOADABLE)) throw new Error("unsupported_repo");
+  job = {
+    state: "downloading",
+    model: repo,
+    logTail: `resolving ${repo} file list…\n`,
+    bytesDone: 0,
+    totalBytes: Math.round(OMLX_DOWNLOADABLE[repo as keyof typeof OMLX_DOWNLOADABLE] * GB),
+  };
+  dlAbort = new AbortController();
+  void (async () => {
+    const signal = dlAbort!.signal;
+    try {
+      const meta = await fetch(`https://huggingface.co/api/models/${repo}`, { signal });
+      if (!meta.ok) throw new Error(`HF API ${meta.status}`);
+      const j = (await meta.json()) as { siblings?: { rfilename: string }[] };
+      const files = (j.siblings ?? [])
+        .map((s) => s.rfilename)
+        .filter((f) => !f.startsWith(".") && !f.includes("/"));
+      // exact total from HEAD content-lengths → real progress percentage
+      let totalBytes = 0;
+      for (const file of files) {
+        const head = await fetch(`https://huggingface.co/${repo}/resolve/main/${file}`, {
+          method: "HEAD",
+          signal,
+        });
+        totalBytes += Number(head.headers.get("content-length") ?? 0);
+      }
+      // oMLX discovery layout: models/<org>/<model>/ with config.json inside
+      const dest = join(homedir(), ".omlx", "models", repo.split("/")[0]!, repo.split("/")[1]!);
+      mkdirSync(dest, { recursive: true });
+      for (const file of files) {
+        job.logTail = (job.logTail + `↓ ${file}\n`).slice(-2000);
+        const res = await fetch(`https://huggingface.co/${repo}/resolve/main/${file}`, { signal });
+        if (!res.ok || !res.body) throw new Error(`${file}: HTTP ${res.status}`);
+        const counter = new Transform({
+          transform(chunk: Buffer, _enc, cb) {
+            job.bytesDone = (job.bytesDone ?? 0) + chunk.length;
+            cb(null, chunk);
+          },
+        });
+        await pipeline(Readable.fromWeb(res.body as never), counter, createWriteStream(join(dest, file)));
+      }
+      lsCache = null;
+      job = { state: "done", model: repo, logTail: job.logTail, bytesDone: totalBytes, totalBytes };
+    } catch (e) {
+      const aborted = (e as Error).name === "AbortError";
+      job = {
+        state: aborted ? "idle" : "error",
+        model: repo,
+        logTail: job.logTail,
+        error: aborted ? undefined : String((e as Error).message).slice(0, 300),
+        bytesDone: job.bytesDone,
+        totalBytes: job.totalBytes,
+      };
+    }
+  })();
+}
+
+export function cancelJob(): void {
+  dlAbort?.abort();
+  dlAbort = null;
+  if (jobActive()) job = { state: "idle", model: null, logTail: "" };
+}
+
 // --- auto-config on every app start ---------------------------------------------
 
 export type BackendState = "up" | "starting" | "off";
 let backendState: BackendState = "off";
 let ensureLock: Promise<void> | null = null;
+// servers this app process started: torn down on app exit (open-with-app, close-with-app)
+type OwnedBackend = { kind: "omlx"; child: ChildProcess } | { kind: "lmstudio" } | null;
+let owned: OwnedBackend = null;
+
+/** Register exit handlers: the LLM backend lives and dies with the app. */
+export function cleanupOnExit(): void {
+  const stop = (): void => {
+    if (!owned) return;
+    log(`app in chiusura — arresto backend ${owned.kind}`);
+    if (owned.kind === "omlx") {
+      // the CLI wrapper spawns a separate omlx-server process: stop both
+      owned.child.kill("SIGTERM");
+      try {
+        spawnSync("pkill", ["-f", "omlx-server"], { timeout: 5000 });
+      } catch {
+        /* best effort */
+      }
+    } else {
+      const lms = resolveLms();
+      if (lms) spawnSync(lms, ["server", "stop"], { timeout: 10_000 });
+    }
+    owned = null;
+  };
+  process.on("exit", stop);
+  for (const sig of ["SIGINT", "SIGTERM"] as const) {
+    process.on(sig, () => {
+      stop();
+      process.exit(0);
+    });
+  }
+}
 
 export function llmBackendState(): BackendState {
   return backendState;
@@ -347,18 +460,53 @@ async function run(): Promise<void> {
       return;
     }
     const port = new URL(base).port || "8080";
-    log(`avvio omlx serve sulla porta ${port}`);
-    // long-lived inference server: survives app restarts (logs to data/llm.log)
-    const out = openSync(LLM_LOG, "a");
-    const child = spawn(omlx, ["serve", "--host", "127.0.0.1", "--port", port], {
-      stdio: ["ignore", out, out],
-      detached: true,
-    });
-    child.unref();
-    for (let i = 0; i < 60 && !(await httpOk(`${base}/models`, 2000, llmAuthHeaders())); i++) {
-      await sleep(2000);
+    const spawnServe = (): void => {
+      log(`avvio omlx serve sulla porta ${port}`);
+      const out = openSync(LLM_LOG, "a");
+      const child = spawn(omlx, ["serve", "--host", "127.0.0.1", "--port", port], {
+        stdio: ["ignore", out, out],
+      });
+      owned = { kind: "omlx", child };
+    };
+    const modelVisible = async (): Promise<boolean> => {
+      try {
+        const res = await fetch(`${base}/models`, {
+          headers: llmAuthHeaders(),
+          signal: AbortSignal.timeout(3000),
+        });
+        if (!res.ok) return false;
+        const j = (await res.json()) as { data?: { id?: string }[] };
+        return (j.data ?? []).some((m) => m.id === cfg.model);
+      } catch {
+        return false;
+      }
+    };
+
+    if (!(await httpOk(`${base}/models`, 2000, llmAuthHeaders()))) {
+      spawnServe();
+      for (let i = 0; i < 60 && !(await httpOk(`${base}/models`, 2000, llmAuthHeaders())); i++) {
+        await sleep(2000);
+      }
     }
-    backendState = (await httpOk(`${base}/models`, 2000, llmAuthHeaders())) ? "up" : "off";
+    // oMLX scans models only at boot: a model downloaded while it was running
+    // is invisible until a restart — rescan and restart when needed
+    if (!(await modelVisible())) {
+      log(`oMLX non vede ${cfg.model} — riavvio del server per rescan`);
+      if (owned?.kind === "omlx") {
+        owned.child.kill("SIGTERM");
+        owned = null;
+        for (let i = 0; i < 30 && (await httpOk(`${base}/models`, 1000, llmAuthHeaders())); i++) {
+          await sleep(1000);
+        }
+        spawnServe();
+        for (let i = 0; i < 60 && !(await httpOk(`${base}/models`, 2000, llmAuthHeaders())); i++) {
+          await sleep(2000);
+        }
+      } else {
+        log("server oMLX esterno all'app: serve un riavvio manuale per vedere i modelli nuovi");
+      }
+    }
+    backendState = (await modelVisible()) ? "up" : "off";
     log(`backend omlx: ${backendState}`);
     return;
   }
@@ -376,6 +524,7 @@ async function run(): Promise<void> {
     backendState = "off";
     return;
   }
+  owned = { kind: "lmstudio" }; // we started it → we stop it on app exit
   const ls = await runLms(lms, ["ls", "--json"], 30_000);
   let installed = false;
   try {
@@ -529,6 +678,23 @@ setupRoutes.post("/finish", async (c) => {
     lmsPath: lms,
   });
   ensureLlmServer();
+  return c.json({ ok: true });
+});
+
+setupRoutes.post("/omlx-download", async (c) => {
+  const body = (await c.req.json().catch(() => null)) as { model?: string } | null;
+  if (!body?.model) return c.json({ error: "invalid_request" }, 400);
+  try {
+    startOmlxDownload(body.model);
+    return c.json({ ok: true });
+  } catch (e) {
+    const msg = (e as Error).message;
+    return c.json({ error: msg }, msg === "busy" ? 409 : 400);
+  }
+});
+
+setupRoutes.post("/cancel", (c) => {
+  cancelJob();
   return c.json({ ok: true });
 });
 

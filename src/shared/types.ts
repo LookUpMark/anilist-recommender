@@ -113,6 +113,13 @@ export interface SetupStatus {
   lms: { installed: boolean; path: string | null; serverUp: boolean };
   omlx: { installed: boolean; serverUp: boolean; models: string[] };
   downloadedModels: string[];
-  job: { state: "idle" | "installing-cli" | "downloading" | "done" | "error"; model: string | null; logTail: string; error?: string };
+  job: {
+    state: "idle" | "installing-cli" | "downloading" | "done" | "error";
+    model: string | null;
+    logTail: string;
+    error?: string;
+    bytesDone?: number;
+    totalBytes?: number;
+  };
   llm: { state: "up" | "starting" | "off" };
 }

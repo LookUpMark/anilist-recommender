@@ -56,8 +56,8 @@ export const llmModel = (): string => process.env.LLM_MODEL ?? fileConfig.model 
 export const llmBaseUrl = (): string =>
   process.env.LLM_BASE_URL ?? fileConfig.baseUrl ?? "http://127.0.0.1:11434/v1";
 export const hasCustomEnv = (): boolean => Boolean(process.env.LLM_BASE_URL);
-// explain runs async in the UI: generous timeout covers cold model loads + thinkers
-export const LLM_TIMEOUT_MS = Number(process.env.LLM_TIMEOUT_MS ?? 120_000);
+// explain runs async in the UI: generous timeout covers cold model loads + reasoning models
+export const LLM_TIMEOUT_MS = Number(process.env.LLM_TIMEOUT_MS ?? 300_000);
 
 // fileURLToPath survives paths with spaces (URL.pathname does not)
 export const CACHE_DIR = process.env.CACHE_DIR ?? join(fileURLToPath(new URL("../../data/", import.meta.url)), "cache");

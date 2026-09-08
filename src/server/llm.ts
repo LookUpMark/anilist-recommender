@@ -23,7 +23,7 @@ async function llmChat(messages: { role: string; content: string }[]): Promise<s
   const res = await fetch(`${llmBaseUrl()}/chat/completions`, {
     method: "POST",
     headers: { "content-type": "application/json", ...llmAuthHeaders() },
-    body: JSON.stringify({ model: llmModel(), messages, temperature: 0.3, max_tokens: 2000 }),
+    body: JSON.stringify({ model: llmModel(), messages, temperature: 0.3, max_tokens: 4000 }),
     signal: AbortSignal.timeout(LLM_TIMEOUT_MS),
   });
   if (!res.ok) throw new Error(`LLM HTTP ${res.status}`);
@@ -67,43 +67,53 @@ function buildPrompt(recos: ScoredReco[], profile: TasteProfile, lang: Lang): st
   );
 }
 
-/** Extract the first balanced JSON array even when the model wraps it in prose/fences. */
+/** Extract a valid JSON array even when a thinking model wraps it in prose.
+ *  Scans balanced arrays last→first: reasoning text often contains bracketed
+ *  fragments, and the real answer comes after it. */
 export function parseExplanations(raw: string): { id: number; why: string }[] {
-  const start = raw.indexOf("[");
-  if (start === -1) return [];
-  // depth scan to the matching ] (string-aware): lastIndexOf can splice two arrays
+  const tryParse = (slice: string): { id: number; why: string }[] | null => {
+    try {
+      const arr = JSON.parse(slice) as { id?: unknown; why?: unknown }[];
+      if (!Array.isArray(arr)) return null;
+      const items = arr
+        .map((x) => ({ id: typeof x?.id === "number" ? x.id : Number(x?.id), why: x?.why }))
+        .filter(
+          (x): x is { id: number; why: string } =>
+            x.id !== null && Number.isInteger(x.id) && typeof x.why === "string",
+        );
+      return items.length > 0 ? items : null;
+    } catch {
+      return null;
+    }
+  };
+
+  // collect candidate [ ... ] spans (string-aware depth scan)
+  const spans: [number, number][] = [];
   let depth = 0;
+  let start = -1;
   let inString = false;
-  let end = -1;
-  for (let i = start; i < raw.length; i++) {
+  for (let i = 0; i < raw.length; i++) {
     const ch = raw[i];
     if (inString) {
       if (ch === "\\") i++;
       else if (ch === '"') inString = false;
     } else if (ch === '"') inString = true;
-    else if (ch === "[") depth++;
-    else if (ch === "]") {
+    else if (ch === "[") {
+      if (depth === 0) start = i;
+      depth++;
+    } else if (ch === "]") {
       depth--;
-      if (depth === 0) {
-        end = i;
-        break;
+      if (depth === 0 && start >= 0) {
+        spans.push([start, i]);
+        start = -1;
       }
     }
   }
-  if (end === -1) return [];
-  try {
-    const arr = JSON.parse(raw.slice(start, end + 1)) as { id?: unknown; why?: unknown }[];
-    return Array.isArray(arr)
-      ? arr
-          .map((x) => ({ id: typeof x?.id === "number" ? x.id : Number(x?.id), why: x?.why }))
-          .filter(
-            (x): x is { id: number; why: string } =>
-              x.id !== null && Number.isInteger(x.id) && typeof x.why === "string",
-          )
-      : [];
-  } catch {
-    return [];
+  for (const [s, e] of spans.reverse()) {
+    const items = tryParse(raw.slice(s, e + 1));
+    if (items) return items;
   }
+  return [];
 }
 
 async function cacheGet(key: string): Promise<Record<string, string> | null> {
@@ -155,7 +165,11 @@ export async function explainRecos(
     for (let i = 0; i < pending.length; i += 10) {
       const batch = pending.slice(i, i + 10);
       const raw = await llmChat([
-        { role: "system", content: "You output only valid JSON." },
+        {
+          role: "system",
+          content:
+            "You output only valid JSON. If you reason first, keep it under 100 words — the reply must end with the JSON array.",
+        },
         { role: "user", content: buildPrompt(batch, profile, lang) },
       ]);
       for (const e of parseExplanations(raw)) {
