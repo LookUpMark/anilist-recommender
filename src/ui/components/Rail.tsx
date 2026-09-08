@@ -43,7 +43,16 @@ export function Rail(props: {
   return (
     <aside className="sidebar" data-od-id="sidebar">
       <div className="brand">
-        <span className="brand-mark" aria-hidden="true">A</span>
+        <span className="brand-mark" aria-hidden="true">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
+            {/* torii gate — the Osusume mark */}
+            <path d="M4.4 8Q12 5.4 19.6 8" />
+            <path d="M12 6.6V9.6" />
+            <path d="M6.3 9.6h11.4" />
+            <path d="M7.7 9.6V19M16.3 9.6V19" />
+            <path d="M5.9 14.2h12.2" />
+          </svg>
+        </span>
       </div>
       <nav className="nav" aria-label={tr(lang, "appName")}>
         {items.map((v) => (

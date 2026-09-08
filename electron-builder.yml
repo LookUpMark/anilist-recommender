@@ -1,5 +1,5 @@
-appId: com.lookupmark.anilist-recommender
-productName: AniList Recommender
+appId: com.lookupmark.osusume
+productName: Osusume
 directories:
   output: release
 # everything is bundled (UI + server .mjs): no node_modules inside the .app
@@ -11,13 +11,14 @@ files:
 asar: false # ELECTRON_RUN_AS_NODE child reads plain files; bundle is tiny
 mac:
   category: public.app-category.entertainment
+  icon: build/icon.icns
   target:
     - target: dmg
       arch: [arm64]
   identity: null # unsigned (ad-hoc): first launch needs right-click → Open
   darkModeSupport: true
 dmg:
-  artifactName: AniList-Recommender-${version}-${arch}.dmg
+  artifactName: Osusume-${version}-${arch}.dmg
   contents:
     - { x: 130, y: 220 }
     - { x: 410, y: 220, type: link, path: /Applications }

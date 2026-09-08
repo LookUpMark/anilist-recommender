@@ -1,7 +1,7 @@
 {
   "name": "anilist-recommender",
-  "version": "0.4.1",
-  "description": "Self-hosted anime recommendations from your AniList list — deterministic taste profile, local LLM explanations, hidden gems, franchise-aware.",
+  "version": "0.5.0",
+  "description": "Osusume — self-hosted anime recommendations from your AniList list — deterministic taste profile, local LLM explanations, hidden gems, franchise-aware.",
   "type": "module",
   "license": "MIT",
   "packageManager": "pnpm@12.3.4",

@@ -42,7 +42,7 @@ async function waitHealth(port: number, timeoutMs = 15_000): Promise<boolean> {
 }
 
 function fail(message: string, detail: string): void {
-  dialog.showErrorBox("AniList Recommender", `${message}\n\n${detail}`);
+  dialog.showErrorBox("Osusume", `${message}\n\n${detail}`);
   app.quit();
 }
 

@@ -4,7 +4,7 @@ export type { Lang };
 type Dict = Record<string, string>;
 
 const en: Dict = {
-  appName: "AniList Recommender",
+  appName: "Osusume",
   tagline: "Anime picks from your own list — explained.",
   go: "Get recommendations",
   loadingProfile: "Reading your list…",
@@ -133,7 +133,7 @@ const en: Dict = {
 };
 
 const it: Dict = {
-  appName: "AniList Recommender",
+  appName: "Osusume",
   tagline: "Anime consigliati dalla tua lista — con spiegazione.",
   go: "Consigliami",
   loadingProfile: "Leggo la tua lista…",
