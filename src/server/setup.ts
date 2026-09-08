@@ -4,10 +4,10 @@ import { Readable, Transform } from "node:stream";
 import { pipeline } from "node:stream/promises";
 import { homedir, platform, arch, totalmem, cpus } from "node:os";
 import { join } from "node:path";
-import { fileURLToPath } from "node:url";
 import { Hono } from "hono";
 import {
   CONFIG_PATH,
+  DATA_DIR,
   hasCustomEnv,
   readConfigFile,
   updateConfig,
@@ -15,7 +15,6 @@ import {
 } from "./config.ts";
 import type { SetupHardware, SetupStatus } from "../shared/types.ts";
 
-const DATA_DIR = fileURLToPath(new URL("../../data/", import.meta.url)); // survives spaces in path
 const LLM_LOG = join(DATA_DIR, "llm.log");
 
 // --- model catalogue (verified 2026-09-07, Apache 2.0, prism-ml on HF) ----------

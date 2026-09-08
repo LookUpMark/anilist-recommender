@@ -13,6 +13,14 @@ Every existing recommender misses at least one of these (verified 2026-09, see `
 
 ## Quickstart
 
+### macOS app (DMG)
+
+Download `AniList-Recommender-<version>-arm64.dmg` from the [latest release](https://github.com/LookUpMark/anilist-recommender/releases/latest), open it and drag the app to Applications.
+
+The build is **unsigned** (no Apple Developer ID): on first launch macOS may block it — **right-click the app → Open → Open** (once), or if it reports the app as damaged, run `xattr -cr "/Applications/AniList Recommender.app"`. The app checks GitHub releases on startup: when a new version is out, an arrow chip appears in the sidebar — clicking it opens the release page for the new DMG (updates are manual by design while the app is unsigned). Data lives in `~/Library/Application Support/anilist-recommender/`.
+
+Build it yourself: `pnpm dist:mac` (output in `release/`).
+
 ### Docker (fewest commands)
 
 ```bash
@@ -56,6 +64,7 @@ pnpm record-fixtures <username>            # record your real list as fixtures (
 | Endpoint | Description |
 |---|---|
 | `GET /api/health` | `{ok, llm: {enabled, model}}` |
+| `GET /api/app-update` | in-app update check (packaged builds only) |
 | `GET /api/profile/:username` | taste profile (loved/disliked tags, genres, studios, eras) |
 | `POST /api/recommend {username, lang}` | `{profile, recos[≤50], avoided[≤3]}` |
 | `POST /api/explain {username, ids, lang}` | LLM (or fallback) explanations for given media ids |

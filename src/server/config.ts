@@ -1,6 +1,6 @@
-import { existsSync, readFileSync, renameSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 
 // Minimal .env loader (no dependency): KEY=VALUE lines, existing env wins.
 try {
@@ -17,6 +17,8 @@ export const PORT = Number(process.env.PORT ?? 3000);
 export const ANILIST_ENDPOINT = process.env.ANILIST_ENDPOINT ?? "https://graphql.anilist.co";
 export const ANILIST_FIXTURES = process.env.ANILIST_FIXTURES ?? "";
 export const RATE_PER_MIN = Math.max(1, Number(process.env.RATE_PER_MIN ?? 25));
+// packaged app version, injected by the Electron main — absent in dev/docker
+export const APP_VERSION = process.env.APP_VERSION;
 
 // --- local (fixture) mode: auto-fallback when AniList is unreachable -------------
 // env ANILIST_FIXTURES pins the mode on for the whole process (tests, demos).
@@ -63,8 +65,12 @@ export interface AppConfig {
   lmsPath?: string;
 }
 
-export const CONFIG_PATH =
-  process.env.CONFIG_PATH ?? new URL("../../data/config.json", import.meta.url).pathname;
+// All runtime data (config, cache, logs) lives in one directory: the repo's data/
+// in dev, ~/Library/Application Support/… when packaged (env from electron main —
+// the .app bundle is read-only under App Translocation).
+export const DATA_DIR = process.env.ALR_DATA_DIR ?? join(fileURLToPath(new URL("../../data/", import.meta.url)));
+
+export const CONFIG_PATH = process.env.CONFIG_PATH ?? join(DATA_DIR, "config.json");
 
 /** Tolerant read: any error (missing, corrupt) yields an empty config. */
 export function readConfigFile(path: string = CONFIG_PATH): AppConfig {
@@ -79,6 +85,7 @@ let fileConfig = readConfigFile();
 
 /** Atomic write (tmp + rename) + in-memory refresh. */
 export function updateConfig(patch: AppConfig, path: string = CONFIG_PATH): void {
+  mkdirSync(dirname(path), { recursive: true }); // packaged data dir may not exist yet
   const merged = { ...readConfigFile(path), ...patch };
   writeFileSync(`${path}.tmp`, JSON.stringify(merged, null, 2));
   renameSync(`${path}.tmp`, path);
@@ -94,7 +101,7 @@ export const hasCustomEnv = (): boolean => Boolean(process.env.LLM_BASE_URL);
 export const LLM_TIMEOUT_MS = Number(process.env.LLM_TIMEOUT_MS ?? 300_000);
 
 // fileURLToPath survives paths with spaces (URL.pathname does not)
-export const CACHE_DIR = process.env.CACHE_DIR ?? join(fileURLToPath(new URL("../../data/", import.meta.url)), "cache");
+export const CACHE_DIR = process.env.CACHE_DIR ?? join(DATA_DIR, "cache");
 export const CACHE_TTL_LIST_MS = 60 * 60 * 1000; // 1h — lists change while you watch
 export const CACHE_TTL_MEDIA_MS = 7 * 24 * 60 * 60 * 1000; // 7d — metadata is stable
 export const CACHE_TTL_EXPL_MS = 7 * 24 * 60 * 60 * 1000;

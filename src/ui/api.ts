@@ -26,6 +26,15 @@ export const postLocalMode = (auto: boolean): Promise<{ ok: boolean; local: Loca
     body: JSON.stringify({ auto }),
   }).then(json);
 
+export interface AppUpdate {
+  current: string | null;
+  latest: string | null;
+  url: string | null;
+  available: boolean;
+}
+
+export const fetchAppUpdate = (): Promise<AppUpdate> => fetch("/api/app-update").then(json);
+
 export const fetchProfile = (username: string): Promise<{ profile: TasteProfile }> =>
   fetch(`/api/profile/${encodeURIComponent(username)}`).then(json);
 

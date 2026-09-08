@@ -12,6 +12,7 @@ import {
 import { explainRecos, llmHealth } from "./llm.ts";
 import { getProfile, getRecommendation } from "./recommend.ts";
 import { llmBackendState, setupRoutes } from "./setup.ts";
+import { appUpdateStatus } from "./update.ts";
 
 const USERNAME_RE = /^[A-Za-z0-9_-]{1,32}$/;
 const LANGS: ReadonlySet<string> = new Set(["en", "it"]);
@@ -37,6 +38,8 @@ api.get("/health", async (c) =>
     local: { on: localModeOn(), available: fixturesAvailable(), auto: autoFallbackOn() },
   }),
 );
+
+api.get("/app-update", async (c) => c.json(await appUpdateStatus()));
 
 // UI toggle: auto-fallback on AniList failure. Switching it off also retries live.
 api.post("/local-mode", async (c) => {
