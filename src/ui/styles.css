@@ -518,6 +518,18 @@ button:disabled { opacity: 0.5; cursor: default; }
 .linklike { background: none; border: none; color: var(--muted); padding: 4px 0; cursor: pointer; font-size: 0.85rem; }
 .linklike:hover { color: var(--fg); text-decoration: underline; text-underline-offset: 3px; }
 
+/* ── settings ───────────────────────────────────────────────── */
+.set-row { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 14px 0; border-bottom: 1px solid var(--border); }
+.set-row:last-child { border-bottom: none; }
+.set-row > span { font-size: 0.9rem; }
+.set-row .set-stack { display: grid; gap: 2px; justify-items: end; text-align: right; }
+.set-row small { color: var(--muted); font-size: 0.75rem; }
+.set-row small.ok { color: var(--ok, #6ee7a0); }
+.seg { display: inline-flex; border: 1px solid var(--border); border-radius: 999px; overflow: hidden; }
+.seg button { background: none; border: none; color: var(--muted); font: inherit; font-size: 0.75rem; padding: 5px 14px; cursor: pointer; }
+.seg button + button { border-left: 1px solid var(--border); }
+.seg button[aria-pressed="true"] { background: var(--surface-2); color: var(--fg); }
+
 /* ── reflow ─────────────────────────────────────────────────── */
 @media (max-width: 920px) {
   .shell { grid-template-columns: 64px 1fr; }

@@ -7,23 +7,23 @@
     </linearGradient>
     <!-- userSpaceOnUse: objectBoundingBox gradients silently fail on straight
          lines (zero-area bbox) — the beams would vanish -->
-    <linearGradient id="stroke" x1="0" y1="240" x2="0" y2="880" gradientUnits="userSpaceOnUse">
+    <linearGradient id="stroke" x1="0" y1="220" x2="0" y2="860" gradientUnits="userSpaceOnUse">
       <stop offset="0" stop-color="#c7c2ff"/>
       <stop offset="1" stop-color="#9f92ff"/>
     </linearGradient>
   </defs>
   <rect width="1024" height="1024" rx="232" fill="url(#bg)"/>
   <g fill="none" stroke="url(#stroke)" stroke-width="18" stroke-linecap="round" stroke-linejoin="round">
-    <!-- kasagi: curved top lintel, ends lifted -->
-    <path d="M162 292 Q 488 222, 814 292"/>
+    <!-- kasagi: curved top lintel, ends lifted (glyph centered on 512) -->
+    <path d="M186 272 Q 512 202, 838 272"/>
     <!-- gakuzuka: center strut between kasagi and shimaki -->
-    <path d="M488 282 V 396"/>
+    <path d="M512 262 V 376"/>
     <!-- shimaki: second beam -->
-    <path d="M226 396 H 750"/>
+    <path d="M250 376 H 774"/>
     <!-- pillars -->
-    <path d="M288 396 V 806"/>
-    <path d="M688 396 V 806"/>
+    <path d="M312 376 V 786"/>
+    <path d="M712 376 V 786"/>
     <!-- nuki: crossing beam -->
-    <path d="M212 568 H 764"/>
+    <path d="M236 548 H 788"/>
   </g>
 </svg>

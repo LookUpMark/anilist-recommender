@@ -5,7 +5,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { spawn, type ChildProcess } from "node:child_process";
 import { readConfigFile, updateConfig, type AppConfig } from "../src/server/config.ts";
-import { suggestModel, type Hardware } from "../src/server/setup.ts";
+import { needsSetupVersion, suggestModel, type Hardware } from "../src/server/setup.ts";
 
 const hw = (over: Partial<Hardware> = {}): Hardware => ({
   os: "mac",
@@ -27,6 +27,13 @@ test("suggestModel: RAM thresholds pick 27B vs 8B", () => {
 test("suggestModel: MLX variant only on Apple Silicon", () => {
   assert.ok(suggestModel(hw({ appleSilicon: true })).mlx?.model.includes("mlx"));
   assert.equal(suggestModel(hw({ appleSilicon: false })).mlx, null);
+});
+
+test("needsSetupVersion: wizard reopens on app update, ack silences it", () => {
+  assert.equal(needsSetupVersion({}, "0.5.4"), true, "no marker yet");
+  assert.equal(needsSetupVersion({ setupVersion: "0.5.3" }, "0.5.4"), true, "older marker");
+  assert.equal(needsSetupVersion({ setupVersion: "0.5.4" }, "0.5.4"), false, "acked");
+  assert.equal(needsSetupVersion({ setupVersion: "0.5.3" }, undefined), false, "dev: no APP_VERSION");
 });
 
 test("config precedence: env > file > default; corrupt file tolerated", () => {

@@ -58,6 +58,8 @@ export function fixturesAvailable(): boolean {
 
 export interface AppConfig {
   setupDone?: boolean;
+  /** app version that last completed the wizard — mismatch reopens it after an update */
+  setupVersion?: string;
   backend?: "lmstudio" | "omlx" | "custom" | "skipped";
   /** lmstudio: lms key · omlx: directory name under ~/.omlx/models */
   model?: string;

@@ -62,6 +62,7 @@ export const fetchExplain = (
 const isSetupStatus = (b: unknown): b is SetupStatus =>
   !!b && typeof b === "object" &&
   typeof (b as SetupStatus).setupDone === "boolean" &&
+  typeof (b as SetupStatus).needsSetup === "boolean" &&
   !!(b as SetupStatus).hardware && !!(b as SetupStatus).job &&
   Array.isArray((b as SetupStatus).downloadedModels);
 
@@ -75,7 +76,7 @@ export const fetchSetupStatus = (): Promise<SetupStatus> =>
 
 /** Errors arrive as thrown Error (server code in message) — {ok:true} on success. */
 export const postSetup = (
-  action: "install-cli" | "download" | "finish" | "reset" | "omlx-download" | "cancel",
+  action: "install-cli" | "download" | "finish" | "reset" | "omlx-download" | "cancel" | "ack",
   body?: object,
 ): Promise<{ ok: boolean }> =>
   fetch(`/api/setup/${action}`, {

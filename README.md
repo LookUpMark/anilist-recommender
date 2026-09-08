@@ -2,6 +2,11 @@
 
 Personalized anime recommendations from your own AniList list — with explanations, hidden gems, and franchise awareness. Everything runs locally: the recommendation engine is deterministic and inspectable, and the narrative explanations come from **your own LLM server** (Ollama, LM Studio, or any OpenAI-compatible endpoint). No cloud, no accounts.
 
+| | |
+|---|---|
+| ![Recommendations](docs/screenshots/home.png) | ![Detail](docs/screenshots/detail.png) |
+| ![Setup wizard](docs/screenshots/setup-wizard.png) | ![Settings](docs/screenshots/settings.png) |
+
 ## Why this one
 
 Every existing recommender misses at least one of these (verified 2026-09, see `docs/competitors.md`):

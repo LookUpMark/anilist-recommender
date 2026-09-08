@@ -28,6 +28,14 @@ export function SetupWizard(props: {
   );
   const pollReq = useRef(0);
 
+  // Reopen after an app update: config already valid — acknowledge the version
+  // marker once so the wizard doesn't come back on every launch.
+  const reopened = props.initial.setupDone;
+  useEffect(() => {
+    if (reopened) void postSetup("ack").catch(() => undefined);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   // poll while the wizard is open: job progress + backend state (drop stale responses)
   useEffect(() => {
     const t = setInterval(() => {

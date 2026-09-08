@@ -9,6 +9,7 @@ import {
   fetchRecommend,
   fetchSetupStatus,
   postLocalMode,
+  postSetup,
   type AppUpdate,
   type LocalMode,
 } from "./api.ts";
@@ -25,7 +26,7 @@ import type { View } from "./views.ts";
 
 type SortKey = "final" | "gem" | "affinity";
 
-const VIEW_ORDER: View[] = ["home", "recos", "gems", "profile", "avoid"];
+const VIEW_ORDER: View[] = ["home", "recos", "gems", "profile", "avoid", "settings"];
 const gemRank = (r: ScoredReco): number =>
   r.badges.includes("HIDDEN_GEM")
     ? r.breakdown.affinity - r.media.popularity / 1_000_000
@@ -208,13 +209,13 @@ export function App() {
     );
   }
 
-  if (setup && !setup.setupDone && !setup.customEnv) {
+  if (setup && setup.needsSetup && !setup.customEnv) {
     return (
       <SetupWizard
         lang={lang}
         setLang={setLang}
         initial={setup}
-        onDone={() => setSetup({ ...setup, setupDone: true })}
+        onDone={() => setSetup({ ...setup, needsSetup: false, setupDone: true })}
       />
     );
   }
@@ -459,6 +460,73 @@ export function App() {
             ) : (
               <div className="state-box"><p>{tr(lang, "emptyState")}</p></div>
             )}
+          </section>
+
+          {/* ── IMPOSTAZIONI ── */}
+          <section className="view" id="view-settings" data-od-id="view-settings" aria-label={tr(lang, "navSettings")} hidden={view !== "settings"}>
+            <div className="sec-head" style={{ marginTop: 0 }}>
+              <div>
+                <h2>{tr(lang, "navSettings")}</h2>
+              </div>
+            </div>
+
+            <div className="set-row">
+              <span>{tr(lang, "setTitleLang")}</span>
+              <div className="seg" role="group" aria-label={tr(lang, "setTitleLang")}>
+                <button type="button" aria-pressed={lang === "en"} onClick={() => setLang("en")}>EN</button>
+                <button type="button" aria-pressed={lang === "it"} onClick={() => setLang("it")}>IT</button>
+              </div>
+            </div>
+
+            {local?.available && (
+              <div className="set-row">
+                <span>{tr(lang, "setTitleData")}</span>
+                <button
+                  type="button"
+                  className="linklike"
+                  role="switch"
+                  aria-checked={local.auto}
+                  onClick={() => {
+                    postLocalMode(!local.auto).then((r) => setLocal(r.local)).catch(() => undefined);
+                  }}
+                >
+                  {tr(lang, "localAuto")} — {local.auto ? tr(lang, "on") : tr(lang, "off")}
+                </button>
+              </div>
+            )}
+
+            <div className="set-row">
+              <span>{tr(lang, "setTitleUpd")}</span>
+              <div className="set-stack">
+                {update?.available ? (
+                  <button type="button" className="linklike" onClick={() => update.url && window.open(update.url, "_blank", "noopener")}>
+                    {tr(lang, "updateAvailable", { v: update.latest ?? "" })}
+                  </button>
+                ) : (
+                  <button type="button" className="linklike" onClick={() => fetchAppUpdate().then(setUpdate).catch(() => undefined)}>
+                    {tr(lang, "checkUpdates")}
+                  </button>
+                )}
+                {update?.latest && !update.available && <small>{tr(lang, "upToDate")}</small>}
+                {update?.current && <small>{tr(lang, "currentVersion", { v: update.current })}</small>}
+              </div>
+            </div>
+
+            <div className="set-row">
+              <span>{tr(lang, "setTitleLlm")}</span>
+              <div className="set-stack">
+                <small className={llmOn ? "ok" : undefined}>{llmOn ? tr(lang, "llmOn") : tr(lang, "llmOff")}</small>
+                <button
+                  type="button"
+                  className="linklike"
+                  onClick={() => {
+                    postSetup("reset").then(() => window.location.reload()).catch(() => undefined);
+                  }}
+                >
+                  {tr(lang, "rerunSetup")}
+                </button>
+              </div>
+            </div>
           </section>
 
           <footer className="pagefoot" data-od-id="footer">

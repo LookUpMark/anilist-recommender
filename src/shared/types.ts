@@ -107,6 +107,8 @@ export interface SetupHardware {
 
 export interface SetupStatus {
   setupDone: boolean;
+  /** true anche dopo un aggiornamento (setupVersion mismatch) — riapre il wizard */
+  needsSetup: boolean;
   customEnv: boolean;
   hardware: SetupHardware;
   suggested: { model: string; sizeGb: number; mlx: { model: string; sizeGb: number } | null };

@@ -6,6 +6,7 @@ import { homedir, platform, arch, totalmem, cpus } from "node:os";
 import { join } from "node:path";
 import { Hono } from "hono";
 import {
+  APP_VERSION,
   CONFIG_PATH,
   DATA_DIR,
   hasCustomEnv,
@@ -60,6 +61,12 @@ export function suggestModel(hw: Hardware): {
     sizeGb: MODELS.b8.sizeGb,
     mlx: hw.appleSilicon ? { model: "prism-ml/Ternary-Bonsai-8B-mlx-2bit", sizeGb: 2.16 } : null,
   };
+}
+
+/** Packaged app only (APP_VERSION set): a version mismatch reopens the wizard.
+ *  In dev (no APP_VERSION) only setupDone decides — behavior unchanged. */
+export function needsSetupVersion(cfg: { setupVersion?: string }, version = APP_VERSION): boolean {
+  return Boolean(version) && cfg.setupVersion !== version;
 }
 
 // --- oMLX (Apple Silicon multi-model server) -------------------------------------
@@ -607,6 +614,7 @@ setupRoutes.get("/status", async (c) => {
   // disclosure-minimal: no absolute binary path, no raw env details beyond hw summary
   const status: SetupStatus = {
     setupDone: Boolean(cfg.setupDone),
+    needsSetup: !cfg.setupDone || needsSetupVersion(cfg),
     customEnv: hasCustomEnv(),
     hardware: hw,
     suggested: suggestModel(hw),
@@ -617,6 +625,13 @@ setupRoutes.get("/status", async (c) => {
     llm: { state: reportedLlmState(serverUp) },
   };
   return c.json(status);
+});
+
+/** Wizard reopen after an app update (setupDone already true): persist only the
+ *  version marker — backend/model choices stay untouched. */
+setupRoutes.post("/ack", (c) => {
+  updateConfig({ setupDone: true, setupVersion: APP_VERSION });
+  return c.json({ ok: true });
 });
 
 setupRoutes.post("/install-cli", (c) => {
@@ -646,7 +661,7 @@ setupRoutes.post("/finish", async (c) => {
     | null;
   if (!body) return c.json({ error: "invalid_request" }, 400);
   if (body.backend === "skipped") {
-    updateConfig({ setupDone: true, backend: "skipped" });
+    updateConfig({ setupDone: true, setupVersion: APP_VERSION, backend: "skipped" });
     return c.json({ ok: true });
   }
   if (body.model != null && !MODEL_KEY_RE.test(body.model)) {
@@ -654,7 +669,7 @@ setupRoutes.post("/finish", async (c) => {
   }
   if (body.baseUrl != null) {
     if (!/^https?:\/\/[\w.:/-]+$/.test(body.baseUrl)) return c.json({ error: "invalid_url" }, 400);
-    const patch: AppConfig = { setupDone: true, backend: "custom", baseUrl: body.baseUrl };
+    const patch: AppConfig = { setupDone: true, setupVersion: APP_VERSION, backend: "custom", baseUrl: body.baseUrl };
     if (body.model) patch.model = body.model;
     updateConfig(patch);
     return c.json({ ok: true });
@@ -662,7 +677,7 @@ setupRoutes.post("/finish", async (c) => {
   if (body.backend === "omlx") {
     if (!body.model) return c.json({ error: "invalid_model" }, 400);
     if (!resolveOmlx()) return c.json({ error: "omlx_missing" }, 400);
-    updateConfig({ setupDone: true, backend: "omlx", model: body.model, baseUrl: OMLX_BASE });
+    updateConfig({ setupDone: true, setupVersion: APP_VERSION, backend: "omlx", model: body.model, baseUrl: OMLX_BASE });
     ensureLlmServer();
     return c.json({ ok: true });
   }
@@ -671,6 +686,7 @@ setupRoutes.post("/finish", async (c) => {
   if (!lms) return c.json({ error: "lms_missing" }, 400);
   updateConfig({
     setupDone: true,
+    setupVersion: APP_VERSION,
     backend: "lmstudio",
     model: body.model,
     baseUrl: LMSTUDIO_BASE,
