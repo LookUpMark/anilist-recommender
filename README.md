@@ -21,6 +21,25 @@ The build is **unsigned** (no Apple Developer ID): on first launch macOS may blo
 
 Build it yourself: `pnpm dist:mac` (output in `release/`).
 
+### Windows installer
+
+Download `Osusume-Setup-<version>.exe` from the [latest release](https://github.com/LookUpMark/osusume/releases/latest) and run it. The build is **unsigned**: SmartScreen may warn — **More info → Run anyway**. Same update chip in the sidebar; data lives in `%APPDATA%\Osusume\`.
+
+Build it yourself: `pnpm dist:win` (on Windows; output in `release/`).
+
+### Linux AppImage
+
+Download `Osusume-<version>.AppImage` from the [latest release](https://github.com/LookUpMark/osusume/releases/latest), then:
+
+```bash
+chmod +x Osusume-<version>.AppImage
+./Osusume-<version>.AppImage
+```
+
+Data lives in `~/.config/Osusume/`.
+
+Build it yourself: `pnpm dist:linux` (on Linux; output in `release/`).
+
 ### Docker (fewest commands)
 
 ```bash

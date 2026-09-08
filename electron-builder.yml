@@ -22,3 +22,19 @@ dmg:
   contents:
     - { x: 130, y: 220 }
     - { x: 410, y: 220, type: link, path: /Applications }
+win:
+  icon: build/icon.png # png ≥256px: electron-builder genera l'ico
+  target:
+    - target: nsis
+      arch: [x64]
+nsis:
+  artifactName: Osusume-Setup-${version}.exe
+  # unsigned → SmartScreen: "More info → Run anyway" (analogo right-click→Apri del mac)
+linux:
+  icon: build/icon.png
+  category: Utility
+  target:
+    - target: AppImage
+      arch: [x64]
+appImage:
+  artifactName: Osusume-${version}.AppImage

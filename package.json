@@ -1,6 +1,6 @@
 {
   "name": "osusume",
-  "version": "0.5.1",
+  "version": "0.5.2",
   "description": "Osusume — self-hosted anime recommendations from your AniList list — deterministic taste profile, local LLM explanations, hidden gems, franchise-aware.",
   "type": "module",
   "license": "MIT",
@@ -18,7 +18,9 @@
     "record-fixtures": "node scripts/record-fixtures.mjs",
     "build:electron": "esbuild electron/main.ts --bundle --platform=node --format=esm --external:electron --outfile=dist-electron/main.mjs && esbuild src/server/index.ts --bundle --platform=node --format=esm --external:vite --outfile=dist-electron/server.mjs",
     "app": "pnpm build && pnpm build:electron && electron .",
-    "dist:mac": "pnpm build && pnpm build:electron && electron-builder --mac"
+    "dist:mac": "pnpm build && pnpm build:electron && electron-builder --mac",
+    "dist:win": "pnpm build && pnpm build:electron && electron-builder --win",
+    "dist:linux": "pnpm build && pnpm build:electron && electron-builder --linux"
   },
   "dependencies": {
     "@hono/node-server": "^1.14.0",
