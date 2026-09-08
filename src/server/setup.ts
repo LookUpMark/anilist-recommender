@@ -433,15 +433,52 @@ export function llmBackendState(): BackendState {
   return backendState;
 }
 
-/** Fire-and-forget: bring the configured LLM backend up (LM Studio or oMLX). */
-export function ensureLlmServer(): void {
-  const cfg = readConfigFile();
-  if (!cfg.setupDone || !cfg.model) return;
-  if (cfg.backend !== "lmstudio" && cfg.backend !== "omlx") return;
+/** First run (or post-reset) with no backend configured: auto-resolve an engine
+ *  that already exists on this machine, so the LLM comes up with the app.
+ *  Only models already on disk are picked — fresh installs go through the wizard. */
+async function autoPickBackend(): Promise<{ backend: "omlx" | "lmstudio"; model: string } | null> {
+  if (resolveOmlx()) {
+    const models = await omlxModels(false); // server not up yet → directory scan
+    if (models.length) {
+      return { backend: "omlx", model: models.find((m) => /bonsai/i.test(m)) ?? models[0] };
+    }
+  }
+  const lms = resolveLms();
+  if (lms) {
+    const models = await downloadedModels(lms).catch(() => [] as string[]);
+    if (models.length) {
+      return { backend: "lmstudio", model: models.find((m) => /bonsai/i.test(m)) ?? models[0] };
+    }
+  }
+  return null;
+}
+
+let lastEnsure = 0;
+
+/** Fire-and-forget: bring the LLM backend up with the app, retry while it's off.
+ *  Contract: the engine starts with the app and stops with the app (SIGTERM at
+ *  quit) — the user never starts it by hand. */
+export function ensureLlmServer(force = false): void {
   if (hasCustomEnv()) return; // env LLM_BASE_URL wins everywhere — hands off
-  if (ensureLock) return; // ponytail: single global lock, mono-user server
+  const cfg = readConfigFile();
+  if (cfg.backend === "skipped" || cfg.backend === "custom") return; // explicit user choice
+  const configured = cfg.backend === "lmstudio" || cfg.backend === "omlx";
+  if (configured && (!cfg.setupDone || !cfg.model)) return;
+  const now = Date.now();
+  if (!force && (ensureLock || now - lastEnsure < (backendState === "up" ? 60_000 : 15_000))) return;
+  lastEnsure = now; // ponytail: time-based retry throttle, no backoff table
   backendState = "starting";
-  ensureLock = run()
+  ensureLock = (async () => {
+    if (!configured) {
+      const pick = await autoPickBackend();
+      if (!pick) {
+        backendState = "off"; // no engine on this machine — wizard's job
+        return;
+      }
+      updateConfig(pick); // persist so the next boot skips the probe
+    }
+    await run();
+  })()
     .catch((e) => {
       log(`ensure fallito: ${e}`);
       backendState = "off";
@@ -678,7 +715,7 @@ setupRoutes.post("/finish", async (c) => {
     if (!body.model) return c.json({ error: "invalid_model" }, 400);
     if (!resolveOmlx()) return c.json({ error: "omlx_missing" }, 400);
     updateConfig({ setupDone: true, setupVersion: APP_VERSION, backend: "omlx", model: body.model, baseUrl: OMLX_BASE });
-    ensureLlmServer();
+    ensureLlmServer(true);
     return c.json({ ok: true });
   }
   if (!body.model) return c.json({ error: "invalid_model" }, 400);
@@ -692,7 +729,7 @@ setupRoutes.post("/finish", async (c) => {
     baseUrl: LMSTUDIO_BASE,
     lmsPath: lms,
   });
-  ensureLlmServer();
+  ensureLlmServer(true);
   return c.json({ ok: true });
 });
 

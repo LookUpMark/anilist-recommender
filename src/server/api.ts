@@ -11,7 +11,7 @@ import {
 } from "./config.ts";
 import { explainRecos, llmHealth } from "./llm.ts";
 import { getProfile, getRecommendation } from "./recommend.ts";
-import { llmBackendState, setupRoutes } from "./setup.ts";
+import { ensureLlmServer, llmBackendState, setupRoutes } from "./setup.ts";
 import { appUpdateStatus } from "./update.ts";
 
 const USERNAME_RE = /^[A-Za-z0-9_-]{1,32}$/;
@@ -31,13 +31,14 @@ api.use("*", async (c, next) => {
   await next();
 });
 
-api.get("/health", async (c) =>
-  c.json({
+api.get("/health", async (c) => {
+  ensureLlmServer(); // throttled no-op unless the backend should be up (or retried)
+  return c.json({
     ok: true,
     llm: { model: llmModel(), enabled: await llmHealth(), state: llmBackendState() },
     local: { on: localModeOn(), available: fixturesAvailable(), auto: autoFallbackOn() },
-  }),
-);
+  });
+});
 
 api.get("/app-update", async (c) => c.json(await appUpdateStatus()));
 

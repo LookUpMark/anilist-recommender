@@ -100,25 +100,45 @@ export function SetupWizard(props: {
   }, [modelDone, status.setupDone, busy]);
 
   return (
-    <main className="app wizard">
-      <header>
-        <div>
-          <h1>{tr(lang, "setupTitle")}</h1>
-          <p className="tagline">{tr(lang, "setupIntro")}</p>
-        </div>
-        <div className="header-side">
-          <button className="lang" onClick={() => props.setLang(lang === "en" ? "it" : "en")}>
-            {tr(lang, "langToggle")}
-          </button>
-        </div>
-      </header>
+    <main className="wizard-page">
+      <button
+        type="button"
+        className="wizard-lang"
+        onClick={() => props.setLang(lang === "en" ? "it" : "en")}
+        aria-label={tr(lang, "langToggle")}
+      >
+        {tr(lang, "langToggle")}
+      </button>
 
-      <section className="profile-panel">
-        <h2>{tr(lang, "hwOs")}: {osLabel(status, lang)}</h2>
-        <p className="profile-meta">
-          {tr(lang, "hwChip")}: <strong>{status.hardware.chip}</strong> · {tr(lang, "hwRam")}:{" "}
-          <strong>{status.hardware.ramGb} GB</strong>
-        </p>
+      <div className="wizard-brand" aria-hidden="true">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
+          <path d="M4.4 8Q12 5.4 19.6 8" />
+          <path d="M12 6.6V9.6" />
+          <path d="M6.3 9.6h11.4" />
+          <path d="M7.7 9.6V19M16.3 9.6V19" />
+          <path d="M5.9 14.2h12.2" />
+        </svg>
+      </div>
+      <p className="wizard-wordmark">{tr(lang, "appName")}</p>
+
+      <section className="wizard-card">
+        <ol className="wizard-steps" aria-label={tr(lang, "setupTitle")}>
+          {[1, 2, 3].map((n) => (
+            <li key={n} className={n === step ? "cur" : n < step ? "done" : ""}>
+              <span className="dot" aria-hidden="true">{n < step ? "✓" : n}</span>
+              <span className="lbl">{tr(lang, `setStep${n}`)}</span>
+            </li>
+          ))}
+        </ol>
+
+        <h1>{tr(lang, "setupTitle")}</h1>
+        <p className="wizard-sub">{tr(lang, "setupIntro")}</p>
+
+        <div className="hw-row">
+          <span className="hw-chip">{osLabel(status, lang)}</span>
+          <span className="hw-chip">{status.hardware.chip}</span>
+          <span className="hw-chip">{status.hardware.ramGb} GB RAM</span>
+        </div>
 
         {step === 1 && (
           <>
@@ -165,7 +185,7 @@ export function SetupWizard(props: {
                     <span>
                       {tr(lang, "recModel")}: <strong>prism-ml/Ternary-Bonsai-27B-mlx-2bit</strong> (7.9 GB)
                     </span>
-                    <button
+                    <button className="btn-primary"
                       disabled={jobBusy || busy}
                       onClick={async () => {
                         setBusy(true);
@@ -193,7 +213,7 @@ export function SetupWizard(props: {
                 ) : null}
                 <p className="hint">{tr(lang, "omlxStartNote")}</p>
                 <div className="action-row">
-                  <button disabled={busy || jobBusy} onClick={() => finish({ backend: "omlx", model })}>
+                  <button className="btn-primary" disabled={busy || jobBusy} onClick={() => finish({ backend: "omlx", model })}>
                     {tr(lang, "go")}
                   </button>
                 </div>
@@ -243,7 +263,7 @@ export function SetupWizard(props: {
               </div>
             )}
             <div className="action-row">
-              <button
+              <button className="btn-primary"
                 disabled={busy || !status.lms.installed}
                 onClick={download}
               >
@@ -286,7 +306,7 @@ export function SetupWizard(props: {
                   : tr(lang, "llmOffNote")}
             </p>
             <div className="action-row">
-              <button disabled={busy} onClick={props.onDone}>
+              <button className="btn-primary" disabled={busy} onClick={props.onDone}>
                 {tr(lang, "startUsing")}
               </button>
             </div>

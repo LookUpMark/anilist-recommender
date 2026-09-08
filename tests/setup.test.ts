@@ -137,8 +137,9 @@ test("setup flow with fake lms: status, finish writes config, ensure sequences l
     assert.equal(cfg.backend, "lmstudio");
     assert.equal(cfg.baseUrl, `http://127.0.0.1:${closedPort}/v1`);
 
-    // ensureLlmServer() was kicked by finish: wait for the exact lms sequence
-    // (the /status probe before finish emits one extra leading "ls --json")
+    // ensureLlmServer() was kicked by finish: wait for the documented sequence.
+    // (extra leading "ls --json" probes exist: boot auto-pick + /status; and
+    // /health re-kicks ensure while off — anchor on the LAST "daemon up".)
     const expected = [
       "daemon up",
       "server start",
@@ -154,10 +155,12 @@ test("setup flow with fake lms: status, finish writes config, ensure sequences l
       } catch {
         /* not written yet */
       }
-      if (seq.slice(-expected.length).length >= expected.length && seq.slice(-1)[0]?.startsWith("load")) break;
+      if (seq.slice(-1)[0]?.startsWith("load")) break;
       await new Promise((r) => setTimeout(r, 300));
     }
-    assert.deepEqual(seq.slice(-expected.length), expected, "ensure must run the documented command sequence");
+    const start = seq.lastIndexOf("daemon up");
+    assert.ok(start >= 0, "ensure must run the documented command sequence");
+    assert.deepEqual(seq.slice(start, start + expected.length), expected, "ensure must run the documented command sequence");
 
     // load failed on the fake → backend deterministically off (never a phantom "up")
     const health = await (await fetch(`${BASE}/api/health`)).json();
