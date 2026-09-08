@@ -81,7 +81,7 @@ export function Rail(props: {
             role="switch"
             aria-checked={props.local.auto}
             data-od-id="local-toggle"
-            title={`${tr(lang, "localAuto")} — ${props.local.on ? tr(lang, "localOn") : tr(lang, "localData")}`}
+            data-tip={`${tr(lang, "localAuto")} — ${props.local.on ? tr(lang, "localOn") : tr(lang, "localData")}`}
             onClick={props.onToggleLocal}
           >
             <span className={`llm-dot auto${props.local.on ? " on" : ""}`} aria-hidden="true" />
@@ -94,7 +94,7 @@ export function Rail(props: {
                 type="button"
                 className="llm-chip upd-chip"
                 data-od-id="update-chip"
-                title={tr(lang, "updateAvailable", { v: props.update.latest ?? "" })}
+                data-tip={tr(lang, "updateAvailable", { v: props.update.latest ?? "" })}
                 onClick={() => {
                   const { url } = props.update!;
                   if (url) window.open(url, "_blank", "noopener");
@@ -109,7 +109,7 @@ export function Rail(props: {
                 type="button"
                 className="llm-chip"
                 data-od-id="update-check"
-                title={tr(lang, "checkUpdates")}
+                data-tip={tr(lang, "checkUpdates")}
                 onClick={props.onCheckUpdates}
               >
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" aria-hidden="true">

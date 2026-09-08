@@ -6,6 +6,7 @@ type Dict = Record<string, string>;
 const en: Dict = {
   appName: "Osusume",
   tagline: "Anime picks from your own list — explained.",
+  welcomeHint: "Type an AniList username in the search bar above to get started.",
   go: "Get recommendations",
   loadingProfile: "Reading your list…",
   loadingRecos: "Building recommendations… (first run ~1 min, then cached)",
@@ -135,6 +136,7 @@ const en: Dict = {
 const it: Dict = {
   appName: "Osusume",
   tagline: "Anime consigliati dalla tua lista — con spiegazione.",
+  welcomeHint: "Scrivi un username AniList nella barra di ricerca qui sopra per iniziare.",
   go: "Consigliami",
   loadingProfile: "Leggo la tua lista…",
   loadingRecos: "Costruisco i consigli… (prima volta ~1 min, poi cache)",

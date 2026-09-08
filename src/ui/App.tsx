@@ -71,6 +71,19 @@ export function App() {
     localStorage.setItem("alr-view", v);
   };
 
+  // cross-fade the incoming view + reset scroll when switching sections
+  useEffect(() => {
+    if (!matchMedia("(prefers-reduced-motion: reduce)").matches) {
+      document
+        .getElementById(`view-${view}`)
+        ?.animate([{ opacity: 0.35, transform: "translateY(6px)" }, { opacity: 1, transform: "none" }], {
+          duration: 220,
+          easing: "ease-out",
+        });
+    }
+    window.scrollTo({ top: 0 });
+  }, [view]);
+
   const refreshHealth = () => {
     fetchHealth()
       .then((h) => {
@@ -312,9 +325,17 @@ export function App() {
                 </div>
               </>
             ) : (
-              <div className="state-box" data-od-id="home-empty">
+              <div className="state-box welcome" data-od-id="home-empty">
+                <svg className="mark" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                  <path d="M4.4 8Q12 5.4 19.6 8" />
+                  <path d="M12 6.6V9.6" />
+                  <path d="M6.3 9.6h11.4" />
+                  <path d="M7.7 9.6V19M16.3 9.6V19" />
+                  <path d="M5.9 14.2h12.2" />
+                </svg>
                 <p className="big">{tr(lang, "appName")}</p>
                 <p>{tr(lang, "tagline")}</p>
+                <p className="hint">{tr(lang, "welcomeHint")}</p>
               </div>
             )}
           </section>
