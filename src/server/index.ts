@@ -6,6 +6,10 @@ import { PORT } from "./config.ts";
 import { api } from "./api.ts";
 import { ensureLlmServer } from "./setup.ts";
 
+// 127.0.0.1 by default (loopback-only by design); containers set HOST=0.0.0.0 —
+// the /api Host allowlist middleware still guards what comes through the mapping
+const HOST = process.env.HOST ?? "127.0.0.1";
+
 const app = new Hono();
 app.route("/api", api);
 
@@ -16,11 +20,11 @@ if (process.env.NODE_ENV !== "production") {
   const apiListener = getRequestListener(app.fetch);
   createHttpServer((req: IncomingMessage, res: ServerResponse) =>
     req.url?.startsWith("/api") ? apiListener(req, res) : vite.middlewares(req, res),
-  ).listen(PORT, "127.0.0.1");
+  ).listen(PORT, HOST);
 } else {
   app.use("/*", serveStatic({ root: "./dist" }));
   app.get("/*", serveStatic({ path: "./dist/index.html" }));
-  serve({ fetch: app.fetch, port: PORT, hostname: "127.0.0.1" });
+  serve({ fetch: app.fetch, port: PORT, hostname: HOST });
 }
 
 ensureLlmServer(); // fire-and-forget: no-op unless the setup wizard completed
