@@ -1,7 +1,15 @@
 import { useEffect, useMemo, useState } from "react";
 import { tr, type Lang } from "../shared/strings.ts";
 import type { RecoResult, SetupStatus, TasteProfile } from "../shared/types.ts";
-import { fetchExplain, fetchHealth, fetchProfile, fetchRecommend, fetchSetupStatus } from "./api.ts";
+import {
+  fetchExplain,
+  fetchHealth,
+  fetchProfile,
+  fetchRecommend,
+  fetchSetupStatus,
+  postLocalMode,
+  type LocalMode,
+} from "./api.ts";
 import { ProfilePanel } from "./components/ProfilePanel.tsx";
 import { RecoCard } from "./components/RecoCard.tsx";
 import { SetupWizard } from "./components/SetupWizard.tsx";
@@ -25,6 +33,7 @@ export function App() {
   const [profile, setProfile] = useState<TasteProfile | null>(null);
   const [result, setResult] = useState<RecoResult | null>(null);
   const [llmOn, setLlmOn] = useState<boolean | null>(null);
+  const [local, setLocal] = useState<LocalMode | null>(null);
   const [username, setUsername] = useState("");
   const [sort, setSort] = useState<SortKey>("final");
   const [gemsOnly, setGemsOnly] = useState(false);
@@ -41,11 +50,16 @@ export function App() {
     localStorage.setItem("lang", lang);
   }, [lang]);
 
-  useEffect(() => {
+  const refreshHealth = () => {
     fetchHealth()
-      .then((h) => setLlmOn(h.llm.enabled))
+      .then((h) => {
+        setLlmOn(h.llm.enabled);
+        setLocal(h.local);
+      })
       .catch(() => setLlmOn(false));
-  }, []);
+  };
+
+  useEffect(refreshHealth, []);
 
   const errorMessage = (e: unknown): string =>
     e instanceof Error && e.message === "user_not_found"
@@ -88,6 +102,7 @@ export function App() {
       setPhase("idle");
     } finally {
       setLoading(false);
+      refreshHealth(); // the server may have auto-switched to local mode mid-request
     }
   }
 
@@ -139,6 +154,21 @@ export function App() {
           <p className="tagline">{tr(lang, "tagline")}</p>
         </div>
         <div className="header-side">
+          {local?.on && <span className="chip warn">{tr(lang, "localOn")}</span>}
+          {local?.available && (
+            <label className="chip local-toggle">
+              <input
+                type="checkbox"
+                checked={local.auto}
+                onChange={(e) =>
+                  postLocalMode(e.target.checked)
+                    .then((r) => setLocal(r.local))
+                    .catch(() => undefined)
+                }
+              />
+              {tr(lang, "localAuto")}
+            </label>
+          )}
           {llmOn != null && (
             <span className={`chip ${llmOn ? "ok" : "warn"}`}>
               {llmOn ? tr(lang, "llmOn") : tr(lang, "llmOff")}

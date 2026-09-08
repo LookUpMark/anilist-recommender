@@ -6,8 +6,25 @@ const json = async (res: Response): Promise<any> => {
   return body;
 };
 
-export const fetchHealth = (): Promise<{ ok: boolean; llm: { enabled: boolean; model: string; state?: string } }> =>
-  fetch("/api/health").then(json);
+export interface LocalMode {
+  on: boolean;
+  available: boolean;
+  auto: boolean;
+}
+
+export const fetchHealth = (): Promise<{
+  ok: boolean;
+  llm: { enabled: boolean; model: string; state?: string };
+  local: LocalMode;
+}> => fetch("/api/health").then(json);
+
+/** UI toggle for auto-fallback to local fixture data. */
+export const postLocalMode = (auto: boolean): Promise<{ ok: boolean; local: LocalMode }> =>
+  fetch("/api/local-mode", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ auto }),
+  }).then(json);
 
 export const fetchProfile = (username: string): Promise<{ profile: TasteProfile }> =>
   fetch(`/api/profile/${encodeURIComponent(username)}`).then(json);

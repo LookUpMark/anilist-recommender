@@ -4,7 +4,8 @@ import { join } from "node:path";
 import type { ListEntry, MediaLite, MediaRelationLite, ListStatus } from "../shared/types.ts";
 import {
   ANILIST_ENDPOINT,
-  ANILIST_FIXTURES,
+  fixturesDir,
+  localModeOn,
   CACHE_DIR,
   CACHE_TTL_LIST_MS,
   CACHE_TTL_MEDIA_MS,
@@ -221,7 +222,7 @@ export function mapMedia(m: RawMedia): MediaLite {
 
 async function readFixture<T>(name: string): Promise<T> {
   return JSON.parse(
-    await readFile(join(process.cwd(), ANILIST_FIXTURES, name), "utf8"),
+    await readFile(join(process.cwd(), fixturesDir(), name), "utf8"),
   ) as T;
 }
 
@@ -233,7 +234,7 @@ export interface UserList {
 }
 
 export async function fetchUserList(userName: string): Promise<UserList> {
-  if (ANILIST_FIXTURES) {
+  if (localModeOn()) {
     const f = await readFixture<{ entries: ListEntry[]; media: MediaLite[] }>("userlist.json");
     return { entries: f.entries, mediaById: new Map(f.media.map((m) => [m.id, m])) };
   }
@@ -283,7 +284,7 @@ export async function fetchMediaPage(p: {
   sort: string[];
   page: number;
 }): Promise<{ media: MediaLite[]; hasNextPage: boolean }> {
-  if (ANILIST_FIXTURES) {
+  if (localModeOn()) {
     // fixture mode ignores filters: the recorded pool is served whole
     const all = await readFixture<MediaLite[]>("candidates.json");
     return { media: all, hasNextPage: false };
@@ -306,7 +307,7 @@ export async function fetchMediaPage(p: {
 
 export async function fetchMediaByIds(ids: number[]): Promise<MediaLite[]> {
   if (ids.length === 0) return [];
-  if (ANILIST_FIXTURES) {
+  if (localModeOn()) {
     const all = await readFixture<MediaLite[]>("candidates.json");
     return all.filter((m) => ids.includes(m.id));
   }
@@ -326,7 +327,7 @@ export async function fetchMediaByIds(ids: number[]): Promise<MediaLite[]> {
 export async function fetchRecommendations(
   mediaId: number,
 ): Promise<{ targetId: number; rating: number }[]> {
-  if (ANILIST_FIXTURES) {
+  if (localModeOn()) {
     const map = await readFixture<Record<string, { targetId: number; rating: number }[]>>(
       "recommendations.json",
     );

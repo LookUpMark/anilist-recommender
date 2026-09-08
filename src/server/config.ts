@@ -1,4 +1,4 @@
-import { readFileSync, renameSync, writeFileSync } from "node:fs";
+import { existsSync, readFileSync, renameSync, writeFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { join } from "node:path";
 
@@ -13,9 +13,43 @@ try {
 }
 
 export const PORT = Number(process.env.PORT ?? 3000);
-export const ANILIST_ENDPOINT = "https://graphql.anilist.co";
+// overridable so tests can point at a dead port and exercise the local fallback
+export const ANILIST_ENDPOINT = process.env.ANILIST_ENDPOINT ?? "https://graphql.anilist.co";
 export const ANILIST_FIXTURES = process.env.ANILIST_FIXTURES ?? "";
 export const RATE_PER_MIN = Math.max(1, Number(process.env.RATE_PER_MIN ?? 25));
+
+// --- local (fixture) mode: auto-fallback when AniList is unreachable -------------
+// env ANILIST_FIXTURES pins the mode on for the whole process (tests, demos).
+
+const FIXTURES_DIR = ANILIST_FIXTURES || "fixtures";
+let localMode = Boolean(ANILIST_FIXTURES);
+let autoFallback = true; // default on: switch to fixtures on the first AniList failure
+
+export const fixturesDir = (): string => FIXTURES_DIR;
+export const localModeOn = (): boolean => localMode;
+export const autoFallbackOn = (): boolean => autoFallback;
+
+export function setLocalMode(on: boolean): void {
+  if (!ANILIST_FIXTURES) localMode = on; // env pin wins
+}
+
+export function setAutoFallback(on: boolean): void {
+  autoFallback = on;
+  if (!on) setLocalMode(false); // disabling auto = try live again right away
+}
+
+let fixturesPresent: boolean | null = null;
+export function fixturesAvailable(): boolean {
+  if (ANILIST_FIXTURES) return true;
+  if (fixturesPresent === null) {
+    try {
+      fixturesPresent = existsSync(join(process.cwd(), FIXTURES_DIR, "userlist.json"));
+    } catch {
+      fixturesPresent = false;
+    }
+  }
+  return fixturesPresent;
+}
 
 // --- persisted app config (written by the setup wizard) -------------------------
 // Precedence everywhere: env var > data/config.json > hardcoded default.

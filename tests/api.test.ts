@@ -3,6 +3,8 @@ import { test } from "node:test";
 import { spawn } from "node:child_process";
 import { once } from "node:events";
 import { createServer } from "node:http";
+import { mkdtempSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
 import { join } from "node:path";
 
 /** Bind :0, read the port, release — no fixed-port collisions across test files. */
@@ -31,11 +33,14 @@ async function waitForServer(base: string, timeoutMs = 15000): Promise<void> {
 test("API smoke: fixture mode serves profile, recommendations, graceful LLM fallback", async () => {
   const PORT = await freePort();
   const BASE = `http://127.0.0.1:${PORT}`;
+  // fresh CACHE_DIR: a real explanation cache on disk would surface as source:"cache"
+  const cacheDir = mkdtempSync(join(tmpdir(), "alr-test-"));
   const child = spawn(process.execPath, ["src/server/index.ts"], {
     cwd: join(import.meta.dirname, ".."),
     env: {
       ...process.env,
       ANILIST_FIXTURES: "fixtures",
+      CACHE_DIR: cacheDir,
       PORT: String(PORT),
       LLM_BASE_URL: "http://127.0.0.1:59999/v1", // unreachable → graceful fallback
     },
@@ -110,5 +115,65 @@ test("API smoke: fixture mode serves profile, recommendations, graceful LLM fall
   } finally {
     child.kill("SIGTERM");
     await once(child, "exit").catch(() => undefined); // no orphan port for the next run
+    rmSync(cacheDir, { recursive: true, force: true });
+  }
+});
+
+test("API smoke: AniList down + auto toggle → falls back to local fixtures and back", async () => {
+  const PORT = await freePort();
+  const BASE = `http://127.0.0.1:${PORT}`;
+  // no ANILIST_FIXTURES: fixtures engage only through the runtime auto-fallback.
+  // fresh CACHE_DIR: a cached AniList response would bypass the outage entirely.
+  const cacheDir = mkdtempSync(join(tmpdir(), "alr-test-"));
+  const child = spawn(process.execPath, ["src/server/index.ts"], {
+    cwd: join(import.meta.dirname, ".."),
+    env: {
+      ...process.env,
+      ANILIST_ENDPOINT: "http://127.0.0.1:1", // connection refused → AniListError
+      ANILIST_FIXTURES: "",
+      CACHE_DIR: cacheDir,
+      PORT: String(PORT),
+      LLM_BASE_URL: "http://127.0.0.1:59999/v1",
+    },
+    stdio: ["ignore", "pipe", "pipe"],
+  });
+  try {
+    await waitForServer(BASE);
+
+    let health = await (await fetch(`${BASE}/api/health`)).json();
+    assert.deepEqual(
+      { on: health.local.on, available: health.local.available, auto: health.local.auto },
+      { on: false, available: true, auto: true },
+    );
+
+    // AniList is dead: the request still succeeds, served from fixtures
+    const prof = await (await fetch(`${BASE}/api/profile/josh`)).json();
+    assert.equal(prof.profile.userName, "josh");
+
+    health = await (await fetch(`${BASE}/api/health`)).json();
+    assert.equal(health.local.on, true, "auto-fallback must have engaged");
+
+    // toggle off → back to live mode (env didn't pin it)
+    const toggled = await (
+      await fetch(`${BASE}/api/local-mode`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ auto: false }),
+      })
+    ).json();
+    assert.equal(toggled.local.on, false);
+    assert.equal(toggled.local.auto, false);
+
+    // toggle validation
+    const badToggle = await fetch(`${BASE}/api/local-mode`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ auto: "yes" }),
+    });
+    assert.equal(badToggle.status, 400);
+  } finally {
+    child.kill("SIGTERM");
+    await once(child, "exit").catch(() => undefined);
+    rmSync(cacheDir, { recursive: true, force: true });
   }
 });

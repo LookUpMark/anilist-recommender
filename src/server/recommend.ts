@@ -4,7 +4,7 @@ import { fetchMediaByIds, fetchRecommendations, fetchUserList } from "./anilist.
 import { buildProfile, entrySentiment } from "./profile.ts";
 import { analyzeFranchises } from "./franchise.ts";
 import { dedupeFranchises, deterministicWhyNot, scoreAll } from "./scoring.ts";
-import { WEIGHTS } from "./config.ts";
+import { WEIGHTS, localModeOn } from "./config.ts";
 
 // in-memory result cache: profile+pool are the expensive part; explain() reuses it
 const resultCache = new Map<string, { at: number; result: RecoResult }>();
@@ -23,7 +23,9 @@ export async function getRecommendation(
   lang: Lang,
   opts: { refresh?: boolean } = {},
 ): Promise<RecoResult> {
-  const cacheKey = `${username}:${lang}`;
+  // mode in the key: a cached local-mode result must never resurface after
+  // the app switches back to live AniList data
+  const cacheKey = `${username}:${lang}:${localModeOn() ? "local" : "live"}`;
   if (!opts.refresh) {
     const hit = resultCache.get(cacheKey);
     if (hit && Date.now() - hit.at < RESULT_TTL_MS) return hit.result;

@@ -1,7 +1,14 @@
-import { Hono } from "hono";
+import { Hono, type Context } from "hono";
 import type { Lang } from "../shared/types.ts";
 import { AniListError } from "./anilist.ts";
-import { llmModel } from "./config.ts";
+import {
+  autoFallbackOn,
+  fixturesAvailable,
+  localModeOn,
+  llmModel,
+  setAutoFallback,
+  setLocalMode,
+} from "./config.ts";
 import { explainRecos, llmHealth } from "./llm.ts";
 import { getProfile, getRecommendation } from "./recommend.ts";
 import { llmBackendState, setupRoutes } from "./setup.ts";
@@ -27,22 +34,51 @@ api.get("/health", async (c) =>
   c.json({
     ok: true,
     llm: { model: llmModel(), enabled: await llmHealth(), state: llmBackendState() },
+    local: { on: localModeOn(), available: fixturesAvailable(), auto: autoFallbackOn() },
   }),
 );
+
+// UI toggle: auto-fallback on AniList failure. Switching it off also retries live.
+api.post("/local-mode", async (c) => {
+  const body = (await c.req.json().catch(() => null)) as { auto?: boolean } | null;
+  if (typeof body?.auto !== "boolean") return c.json({ error: "invalid_request" }, 400);
+  setAutoFallback(body.auto);
+  return c.json({ ok: true, local: { on: localModeOn(), available: fixturesAvailable(), auto: autoFallbackOn() } });
+});
+
+// AniList down + auto on + fixtures on disk → flip to local mode and retry once.
+// 404 is a genuine "user not found", not an outage — never masked.
+async function withLocalFallback(c: Context, fn: () => Promise<Response>): Promise<Response> {
+  try {
+    return await fn();
+  } catch (e) {
+    if (
+      e instanceof AniListError &&
+      e.status !== 404 &&
+      autoFallbackOn() &&
+      !localModeOn() &&
+      fixturesAvailable()
+    ) {
+      setLocalMode(true);
+      try {
+        return await fn();
+      } catch {
+        /* fixtures failed too — report the original AniList error */
+      }
+    }
+    return errorResponse(c, e);
+  }
+}
 
 // disclosure-minimal: the base URL can point anywhere after a custom finish — don't announce it
 api.get("/config", (c) => c.json({ llm: { model: llmModel() } }));
 
 api.route("/setup", setupRoutes);
 
-api.get("/profile/:username", async (c) => {
+api.get("/profile/:username", (c) => {
   const username = c.req.param("username");
   if (!USERNAME_RE.test(username)) return c.json({ error: "invalid_username" }, 400);
-  try {
-    return c.json({ profile: await getProfile(username) });
-  } catch (e) {
-    return errorResponse(c, e);
-  }
+  return withLocalFallback(c, async () => c.json({ profile: await getProfile(username) }));
 });
 
 api.post("/recommend", async (c) => {
@@ -52,11 +88,7 @@ api.post("/recommend", async (c) => {
   const username = body?.username ?? "";
   const lang = LANGS.has(body?.lang ?? "") ? (body!.lang as Lang) : "en";
   if (!USERNAME_RE.test(username)) return c.json({ error: "invalid_username" }, 400);
-  try {
-    return c.json(await getRecommendation(username, lang));
-  } catch (e) {
-    return errorResponse(c, e);
-  }
+  return withLocalFallback(c, async () => c.json(await getRecommendation(username, lang)));
 });
 
 api.post("/explain", async (c) => {
@@ -67,16 +99,14 @@ api.post("/explain", async (c) => {
   const ids = new Set((body?.ids ?? []).filter((x) => typeof x === "number"));
   const lang = LANGS.has(body?.lang ?? "") ? (body!.lang as Lang) : "en";
   if (!USERNAME_RE.test(username) || ids.size === 0) return c.json({ error: "invalid_request" }, 400);
-  try {
+  return withLocalFallback(c, async () => {
     const { recos, profile } = await getRecommendation(username, lang);
     const subset = recos.filter((r) => ids.has(r.media.id));
     const explanations = await explainRecos(subset, profile, lang, username);
     return c.json({
       explanations: [...explanations.entries()].map(([id, e]) => ({ id, ...e })),
     });
-  } catch (e) {
-    return errorResponse(c, e);
-  }
+  });
 });
 
 function errorResponse(c: { json: (x: object, status: number) => Response }, e: unknown): Response {
