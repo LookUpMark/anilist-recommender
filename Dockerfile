@@ -2,7 +2,7 @@
 FROM node:22-slim AS build
 WORKDIR /app
 RUN corepack enable
-COPY package.json pnpm-lock.yaml ./
+COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
 RUN pnpm install --frozen-lockfile
 COPY index.html tsconfig.json vite.config.ts ./
 COPY src ./src
@@ -13,7 +13,7 @@ FROM node:22-slim
 WORKDIR /app
 ENV NODE_ENV=production
 RUN corepack enable
-COPY package.json pnpm-lock.yaml ./
+COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
 # react/react-dom live in devDependencies: the UI is already bundled into dist/
 RUN pnpm install --prod --frozen-lockfile
 COPY --from=build /app/dist ./dist
