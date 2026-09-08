@@ -19,11 +19,14 @@ export const fetchHealth = (): Promise<{
 }> => fetch("/api/health").then(json);
 
 /** UI toggle for auto-fallback to local fixture data. */
-export const postLocalMode = (auto: boolean): Promise<{ ok: boolean; local: LocalMode }> =>
+export const postLocalMode = (
+  auto: boolean,
+  local?: boolean,
+): Promise<{ ok: boolean; local: LocalMode }> =>
   fetch("/api/local-mode", {
     method: "POST",
     headers: { "content-type": "application/json" },
-    body: JSON.stringify({ auto }),
+    body: JSON.stringify(local === undefined ? { auto } : { auto, local }),
   }).then(json);
 
 export interface AppUpdate {

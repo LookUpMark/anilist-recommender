@@ -164,6 +164,17 @@ test("API smoke: AniList down + auto toggle → falls back to local fixtures and
     assert.equal(toggled.local.on, false);
     assert.equal(toggled.local.auto, false);
 
+    // {local:false} alone resets the mode but keeps auto armed
+    const reset = await (
+      await fetch(`${BASE}/api/local-mode`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ auto: true, local: false }),
+      })
+    ).json();
+    assert.equal(reset.local.on, false);
+    assert.equal(reset.local.auto, true);
+
     // toggle validation
     const badToggle = await fetch(`${BASE}/api/local-mode`, {
       method: "POST",

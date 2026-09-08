@@ -373,6 +373,10 @@ h1, h2, h3 { color: var(--fg); margin: 0; }
 .error-box { display: flex; align-items: center; gap: 12px; color: var(--body-text); padding: 10px 2px; margin: 0 0 14px; }
 .error-box svg { color: var(--fg); flex: none; }
 .error-box .hint-mono { margin-left: auto; font-family: var(--font-mono); font-size: 11px; color: var(--muted); }
+.local-banner { border: 1px solid var(--border); border-radius: var(--r-md); padding: 10px 14px; background: var(--surface); }
+.local-banner svg { color: var(--accent); }
+.local-banner span { flex: 1; }
+.local-banner .linklike { flex: none; color: var(--accent); }
 
 /* ── dialog ─────────────────────────────────────────────────── */
 .dlg-scrim {

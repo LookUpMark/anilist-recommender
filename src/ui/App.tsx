@@ -249,6 +249,29 @@ export function App() {
             </div>
           )}
 
+          {local?.on && (
+            <div className="error-box local-banner" role="status" data-od-id="local-banner">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" aria-hidden="true">
+                <path d="M12 9v4.5M12 16.6v.2" />
+                <path d="M10.3 4.6 3.6 18a1.6 1.6 0 0 0 1.4 2.4h14a1.6 1.6 0 0 0 1.4-2.4L13.7 4.6a1.6 1.6 0 0 0-2.8 0z" />
+              </svg>
+              <span>{tr(lang, "localBanner")}</span>
+              <button
+                type="button"
+                className="linklike"
+                disabled={loading}
+                onClick={() => {
+                  postLocalMode(true, false)
+                    .then((r) => setLocal(r.local))
+                    .catch(() => undefined);
+                  void run(username);
+                }}
+              >
+                {tr(lang, "retryLive")}
+              </button>
+            </div>
+          )}
+
           {/* ── HOME ── */}
           <section className="view" id="view-home" data-od-id="view-home" aria-label={tr(lang, "navHome")} hidden={view !== "home"}>
             {hero && result ? (

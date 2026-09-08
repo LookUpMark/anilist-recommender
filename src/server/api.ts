@@ -42,10 +42,12 @@ api.get("/health", async (c) =>
 api.get("/app-update", async (c) => c.json(await appUpdateStatus()));
 
 // UI toggle: auto-fallback on AniList failure. Switching it off also retries live.
+// {local:false} forces a live retry without touching the auto preference (banner button).
 api.post("/local-mode", async (c) => {
-  const body = (await c.req.json().catch(() => null)) as { auto?: boolean } | null;
+  const body = (await c.req.json().catch(() => null)) as { auto?: boolean; local?: boolean } | null;
   if (typeof body?.auto !== "boolean") return c.json({ error: "invalid_request" }, 400);
   setAutoFallback(body.auto);
+  if (body.local === false) setLocalMode(false);
   return c.json({ ok: true, local: { on: localModeOn(), available: fixturesAvailable(), auto: autoFallbackOn() } });
 });
 
