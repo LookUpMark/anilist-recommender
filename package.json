@@ -1,6 +1,6 @@
 {
   "name": "anilist-recommender",
-  "version": "0.2.1",
+  "version": "0.3.0",
   "description": "Self-hosted anime recommendations from your AniList list — deterministic taste profile, local LLM explanations, hidden gems, franchise-aware.",
   "type": "module",
   "license": "MIT",
