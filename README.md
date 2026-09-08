@@ -15,7 +15,7 @@ Every existing recommender misses at least one of these (verified 2026-09, see `
 
 ### macOS app (DMG)
 
-Download `Osusume-<version>-arm64.dmg` from the [latest release](https://github.com/LookUpMark/anilist-recommender/releases/latest), open it and drag the app to Applications.
+Download `Osusume-<version>-arm64.dmg` from the [latest release](https://github.com/LookUpMark/osusume/releases/latest), open it and drag the app to Applications.
 
 The build is **unsigned** (no Apple Developer ID): on first launch macOS may block it — **right-click the app → Open → Open** (once), or if it reports the app as damaged, run `xattr -cr "/Applications/Osusume.app"`. The app checks GitHub releases on startup: when a new version is out, an arrow chip appears in the sidebar — clicking it opens the release page for the new DMG (updates are manual by design while the app is unsigned). Data lives in `~/Library/Application Support/Osusume/`.
 

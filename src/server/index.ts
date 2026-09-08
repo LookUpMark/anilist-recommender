@@ -29,4 +29,4 @@ if (process.env.NODE_ENV !== "production") {
 
 ensureLlmServer(); // fire-and-forget: no-op unless the setup wizard completed
 cleanupOnExit(); // LLM backend lives and dies with the app
-console.log(`anilist-recommender on http://127.0.0.1:${PORT}`);
+console.log(`osusume on http://127.0.0.1:${PORT}`);

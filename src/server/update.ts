@@ -1,6 +1,6 @@
 import { APP_VERSION } from "./config.ts";
 
-export const RELEASES_URL = "https://api.github.com/repos/LookUpMark/anilist-recommender/releases/latest";
+export const RELEASES_URL = "https://api.github.com/repos/LookUpMark/osusume/releases/latest";
 
 /** Numeric 3-part compare: >0 if a is newer. Tolerant of a "v" prefix and a
  *  "-prerelease" suffix (prereleases never count as newer than their release). */
